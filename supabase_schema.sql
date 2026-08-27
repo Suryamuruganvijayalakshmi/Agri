@@ -83,19 +83,57 @@ create table if not exists appointments (
   updated_at timestamptz default now()
 );
 
--- Slot Positions Table (NEW)
-create table if not exists slot_positions (
+-- Crops Table (Farmer product management & crop proposals)
+create table if not exists crops (
   id uuid primary key default gen_random_uuid(),
-  slot_id uuid not null references slots(id) on delete cascade,
-  position_number integer not null,
-  status text not null default 'AVAILABLE', -- AVAILABLE, BOOKED, CANCELLED
-  appointment_id uuid references appointments(id) on delete set null,
-  booked_by uuid references farmers(id) on delete set null,
-  booked_at timestamptz,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  constraint unique_slot_position unique (slot_id, position_number)
+  name text not null unique,
+  category text not null default 'Grain',
+  package_weight_kg numeric not null default 50,
+  msp_price_per_kg numeric not null default 22,
+  moisture_threshold_percent numeric not null default 14,
+  status text not null default 'APPROVED', -- APPROVED, PENDING, REJECTED
+  proposed_by uuid references farmers(id) on delete set null,
+  created_at timestamptz default now()
 );
+
+-- Weighments Table
+create table if not exists weighments (
+  id uuid primary key default gen_random_uuid(),
+  appointment_id uuid references appointments(id) on delete cascade,
+  declared_quantity_kg numeric not null,
+  measured_quantity_kg numeric not null,
+  difference_kg numeric not null,
+  machine_id text default 'WEIGHBRIDGE-01',
+  operator_name text default 'Yard Weighmaster',
+  created_at timestamptz default now()
+);
+
+-- Quality Inspections Table
+create table if not exists quality_inspections (
+  id uuid primary key default gen_random_uuid(),
+  appointment_id uuid references appointments(id) on delete cascade,
+  moisture_percent numeric not null,
+  foreign_matter_percent numeric default 0.5,
+  damaged_percent numeric default 0.2,
+  grade text not null default 'Grade A',
+  remarks text,
+  status text not null default 'ACCEPTED', -- ACCEPTED, REJECTED, RECHECK
+  inspector_name text default 'Senior Quality Inspector',
+  created_at timestamptz default now()
+);
+
+-- Audit Logs Table
+create table if not exists audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_role text default 'SYSTEM',
+  user_name text default 'System Operator',
+  action text not null,
+  entity text not null,
+  entity_id text,
+  metadata jsonb,
+  created_at timestamptz default now()
+);
+
 
 -- ============================================================
 -- 3. INDEXES

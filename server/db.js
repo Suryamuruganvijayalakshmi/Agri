@@ -20,6 +20,9 @@ class AgriFlowDatabase {
     this.slots = new Map();
     this.slot_positions = new Map();
     this.products = new Map();
+    this.weighments = new Map();
+    this.quality_inspections = new Map();
+    this.audit_logs = new Map();
     this.system_config = new Map([
       ['green_threshold', 60],
       ['yellow_threshold', 85],
@@ -991,7 +994,151 @@ class AgriFlowDatabase {
       timestamp: new Date().toISOString()
     };
   }
+
+  // --- 12. WEIGHMENT MODULE ---
+  addWeighment({ appointment_id, declared_quantity_kg, measured_quantity_kg, machine_id = 'WEIGHBRIDGE-01', operator_name = 'Yard Weighmaster' }) {
+    const weighId = `WEIGH-${Date.now()}`;
+    const diff = Number(measured_quantity_kg) - Number(declared_quantity_kg);
+    const weighment = {
+      id: weighId,
+      appointment_id,
+      declared_quantity_kg: Number(declared_quantity_kg),
+      measured_quantity_kg: Number(measured_quantity_kg),
+      difference_kg: diff,
+      machine_id,
+      operator_name,
+      created_at: new Date().toISOString()
+    };
+    this.weighments.set(weighId, weighment);
+
+    // Update appointment status to WEIGHED
+    const appt = this.appointments.get(appointment_id);
+    if (appt) {
+      appt.status = 'WEIGHED';
+      this.appointments.set(appointment_id, appt);
+    }
+
+    this.addAuditLog({
+      user_role: 'CENTRE_OPERATOR',
+      user_name: operator_name,
+      action: 'RECORD_WEIGHMENT',
+      entity: 'APPOINTMENT',
+      entity_id: appointment_id,
+      metadata: weighment
+    });
+
+    return { success: true, weighment };
+  }
+
+  // --- 13. QUALITY INSPECTION MODULE ---
+  addQualityInspection({ appointment_id, moisture_percent = 13.5, foreign_matter_percent = 0.5, damaged_percent = 0.2, grade = 'Grade A', remarks = 'MSP Compliance Verified', status = 'ACCEPTED', inspector_name = 'Senior Quality Inspector' }) {
+    const qualId = `QUAL-${Date.now()}`;
+    const inspection = {
+      id: qualId,
+      appointment_id,
+      moisture_percent: Number(moisture_percent),
+      foreign_matter_percent: Number(foreign_matter_percent),
+      damaged_percent: Number(damaged_percent),
+      grade,
+      remarks,
+      status,
+      inspector_name,
+      created_at: new Date().toISOString()
+    };
+    this.quality_inspections.set(qualId, inspection);
+
+    // Update appointment status based on inspection decision
+    const appt = this.appointments.get(appointment_id);
+    if (appt) {
+      if (status === 'ACCEPTED') {
+        appt.status = 'QUALITY_ACCEPTED';
+        // Auto-create procurement record if accepted
+        this.updateProcurementStage({
+          procurement_id: `PROC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+          new_status: 'APPROVED',
+          actual_weighed_kg: appt.declared_quantity_kg,
+          quality_grade: grade,
+          quality_moisture: `${moisture_percent}%`,
+          actor_name: inspector_name,
+          reason: `Quality Inspection APPROVED (${grade}). ${remarks}`
+        });
+      } else if (status === 'REJECTED') {
+        appt.status = 'QUALITY_REJECTED';
+      }
+      this.appointments.set(appointment_id, appt);
+    }
+
+    this.addAuditLog({
+      user_role: 'QUALITY_INSPECTOR',
+      user_name: inspector_name,
+      action: 'QUALITY_INSPECTION',
+      entity: 'APPOINTMENT',
+      entity_id: appointment_id,
+      metadata: inspection
+    });
+
+    return { success: true, inspection };
+  }
+
+  // --- 14. PRODUCT PROPOSAL APPROVAL ENGINE ---
+  approveProduct(productId) {
+    const prod = this.products.get(productId);
+    if (!prod) return { success: false, error: 'Product proposal not found.' };
+    prod.status = 'APPROVED';
+    this.products.set(productId, prod);
+
+    this.addAuditLog({
+      user_role: 'STATE_ADMIN',
+      user_name: 'Director of Agriculture',
+      action: 'APPROVE_PRODUCT_PROPOSAL',
+      entity: 'CROP',
+      entity_id: productId,
+      metadata: prod
+    });
+
+    return { success: true, product: prod };
+  }
+
+  rejectProduct(productId) {
+    const prod = this.products.get(productId);
+    if (!prod) return { success: false, error: 'Product proposal not found.' };
+    prod.status = 'REJECTED';
+    this.products.set(productId, prod);
+
+    this.addAuditLog({
+      user_role: 'STATE_ADMIN',
+      user_name: 'Director of Agriculture',
+      action: 'REJECT_PRODUCT_PROPOSAL',
+      entity: 'CROP',
+      entity_id: productId,
+      metadata: prod
+    });
+
+    return { success: true, product: prod };
+  }
+
+  // --- 15. AUDIT LOG ENGINE ---
+  addAuditLog({ user_role = 'SYSTEM', user_name = 'System Operator', action, entity, entity_id, metadata }) {
+    const logId = `LOG-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const log = {
+      id: logId,
+      user_role,
+      user_name,
+      action,
+      entity,
+      entity_id,
+      metadata: metadata || {},
+      created_at: new Date().toISOString()
+    };
+    this.audit_logs.set(logId, log);
+    return log;
+  }
+
+  getAuditLogs() {
+    return Array.from(this.audit_logs.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
 }
 
 export const db = new AgriFlowDatabase();
+
 

@@ -121,6 +121,17 @@ export default function DemoStoryRunner({ onClose, onRoleSwitch, onRefreshData }
           })}
         </div>
 
+        {/* 1-Click Quick Role Switcher Bar */}
+        <div style={{ background: '#1e293b', padding: '0.65rem 0.85rem', borderRadius: '10px', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 700 }}>QUICK ROLE SWITCH:</span>
+          <div style={{ display: 'flex', gap: '0.35rem' }}>
+            <button onClick={() => onRoleSwitch && onRoleSwitch('FARMER')} style={{ background: '#16a34a', color: 'white', border: 'none', padding: '0.25rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}>🌾 Farmer</button>
+            <button onClick={() => onRoleSwitch && onRoleSwitch('OPERATOR')} style={{ background: '#2563eb', color: 'white', border: 'none', padding: '0.25rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}>🏢 Operator</button>
+            <button onClick={() => onRoleSwitch && onRoleSwitch('INSPECTOR')} style={{ background: '#d97706', color: 'white', border: 'none', padding: '0.25rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}>🧪 Inspector</button>
+            <button onClick={() => onRoleSwitch && onRoleSwitch('ADMIN')} style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.25rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}>🏛️ Admin</button>
+          </div>
+        </div>
+
         {/* Live Execution Output Log */}
         <div style={{ background: '#020617', border: '1px solid #1e293b', padding: '0.75rem', borderRadius: '8px', fontSize: '0.8rem', color: '#4ade80', fontFamily: 'monospace' }}>
           <strong style={{ color: '#94a3b8' }}>DEMO REALTIME BUS LOG:</strong>

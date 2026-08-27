@@ -150,3 +150,45 @@ export const fetchLoadPackageMetrics = async () => {
   return res.json();
 };
 
+export const recordWeighmentAPI = async (weighData) => {
+  const res = await fetch(`${API_BASE}/operator/weighment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(weighData)
+  });
+  return res.json();
+};
+
+export const submitQualityInspectionAPI = async (qualData) => {
+  const res = await fetch(`${API_BASE}/inspector/quality`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(qualData)
+  });
+  return res.json();
+};
+
+export const approveProductAPI = async (productId) => {
+  const res = await fetch(`${API_BASE}/admin/products/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ product_id: productId })
+  });
+  return res.json();
+};
+
+export const rejectProductAPI = async (productId) => {
+  const res = await fetch(`${API_BASE}/admin/products/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ product_id: productId })
+  });
+  return res.json();
+};
+
+export const fetchAuditLogs = async () => {
+  const res = await fetch(`${API_BASE}/admin/audit-logs`);
+  return res.json();
+};
+
+

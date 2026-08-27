@@ -21,7 +21,9 @@ import FarmerNotificationsPage from './pages/FarmerNotificationsPage';
 
 import OperatorDashboard from './components/Operator/OperatorDashboard';
 import InspectorDashboardPage from './pages/InspectorDashboardPage';
+import QualityInspectorDashboard from './pages/QualityInspectorDashboard';
 import DistrictOfficerDashboard from './pages/DistrictOfficerDashboard';
+import StateAdminDashboard from './pages/StateAdminDashboard';
 import CommandCentre from './components/Admin/CommandCentre';
 import DemoStoryRunner from './components/Demo/DemoStoryRunner';
 
@@ -363,7 +365,7 @@ function MainAppContent() {
             path="/inspector/inspections"
             element={
               <ProtectedRoute allowedRoles={['QUALITY_INSPECTOR']} loginPath="/government/login">
-                <InspectorDashboardPage />
+                <QualityInspectorDashboard />
               </ProtectedRoute>
             }
           />
@@ -371,7 +373,7 @@ function MainAppContent() {
             path="/inspector/inspection/:id"
             element={
               <ProtectedRoute allowedRoles={['QUALITY_INSPECTOR']} loginPath="/government/login">
-                <InspectorDashboardPage />
+                <QualityInspectorDashboard />
               </ProtectedRoute>
             }
           />
@@ -383,6 +385,14 @@ function MainAppContent() {
             element={
               <ProtectedRoute allowedRoles={['DISTRICT_OFFICER', 'STATE_ADMIN']} loginPath="/government/login">
                 <DistrictOfficerDashboard centres={centres} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/state"
+            element={
+              <ProtectedRoute allowedRoles={['STATE_ADMIN']} loginPath="/government/login">
+                <StateAdminDashboard centres={centres} />
               </ProtectedRoute>
             }
           />
@@ -414,7 +424,7 @@ function MainAppContent() {
             path="/admin/procurement"
             element={
               <ProtectedRoute allowedRoles={['DISTRICT_OFFICER', 'STATE_ADMIN']} loginPath="/government/login">
-                <CommandCentre centres={centres} />
+                <StateAdminDashboard centres={centres} />
               </ProtectedRoute>
             }
           />
@@ -438,7 +448,7 @@ function MainAppContent() {
             path="/admin/analytics"
             element={
               <ProtectedRoute allowedRoles={['DISTRICT_OFFICER', 'STATE_ADMIN']} loginPath="/government/login">
-                <CommandCentre centres={centres} />
+                <StateAdminDashboard centres={centres} />
               </ProtectedRoute>
             }
           />

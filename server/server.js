@@ -406,6 +406,70 @@ app.get('/api/metrics/load-packages', (req, res) => {
   }
 });
 
+// 16. WEIGHMENT API
+app.post('/api/operator/weighment', (req, res) => {
+  try {
+    const result = db.addWeighment(req.body);
+    if (!result.success) return res.status(400).json(result);
+
+    broadcastRealtimeUpdate('weighment_recorded', result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 17. QUALITY INSPECTION API
+app.post('/api/inspector/quality', (req, res) => {
+  try {
+    const result = db.addQualityInspection(req.body);
+    if (!result.success) return res.status(400).json(result);
+
+    broadcastRealtimeUpdate('quality_inspected', result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 18. ADMIN CROP PROPOSAL APPROVAL / REJECTION API
+app.post('/api/admin/products/approve', (req, res) => {
+  try {
+    const { product_id } = req.body;
+    const result = db.approveProduct(product_id);
+    if (!result.success) return res.status(400).json(result);
+
+    broadcastRealtimeUpdate('product_approved', result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/admin/products/reject', (req, res) => {
+  try {
+    const { product_id } = req.body;
+    const result = db.rejectProduct(product_id);
+    if (!result.success) return res.status(400).json(result);
+
+    broadcastRealtimeUpdate('product_rejected', result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 19. AUDIT LOGS API
+app.get('/api/admin/audit-logs', (req, res) => {
+  try {
+    const logs = db.getAuditLogs();
+    res.json({ success: true, logs });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
