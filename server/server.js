@@ -378,6 +378,26 @@ app.post('/api/booking/phone-whatsapp', (req, res) => {
   }
 });
 
+// 13b. DIRECT WEB POSITION BOOKING API
+app.post('/api/booking/position', (req, res) => {
+  try {
+    const result = db.bookAppointmentPosition(req.body);
+    if (!result.success) return res.status(400).json(result);
+
+    broadcastRealtimeUpdate('slot_position_updated', {
+      slot_id: result.appointment?.slot_id,
+      position_number: result.appointment?.position_number,
+      status: 'BOOKED',
+      appointment: result.appointment
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 // 14. DYNAMIC DEVIATION STORAGE RE-ALLOCATION API
 app.post('/api/reallocate-storage', (req, res) => {
   try {

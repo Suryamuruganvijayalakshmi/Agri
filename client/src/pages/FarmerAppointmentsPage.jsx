@@ -85,20 +85,20 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <span style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              📍 WAREHOUSE STORAGE AREA GRID MONITOR (WHATSAPP & TELEPHONE ONLY)
+              📍 WAREHOUSE STORAGE AREA GRID (WEB DIRECT + WHATSAPP & PHONE HOTLINE)
             </span>
             <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0.25rem 0 0 0', fontFamily: 'Outfit, sans-serif', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Warehouse size={28} color="#4ade80" /> Storage Area Booking Monitor
+              <Warehouse size={28} color="#4ade80" /> Storage Area Booking System
             </h1>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '0.2rem 0 0 0' }}>
-              Appointments are booked <strong>STRICTLY via WhatsApp & Telephone Hotline</strong>. Each storage square represents 1 package area (50kg load).
+              Book by <strong>clicking an open Storage Square on the web</strong> OR use <strong>WhatsApp & Telephone hotline</strong>. 1 Square = 1 Storage Unit (50kg).
             </p>
           </div>
 
           <div style={{ background: 'rgba(22, 163, 74, 0.2)', border: '1px solid #22c55e', padding: '0.5rem 1rem', borderRadius: '10px', textAlign: 'right' }}>
             <div style={{ fontSize: '0.7rem', color: '#86efac', fontWeight: 700 }}>BOOKING CHANNELS</div>
             <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Smartphone size={16} color="#4ade80" /> WhatsApp & Toll-Free IVR
+              <Smartphone size={16} color="#4ade80" /> Web Direct • WhatsApp • IVR
             </div>
           </div>
         </div>

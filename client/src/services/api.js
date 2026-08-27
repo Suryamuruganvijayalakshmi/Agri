@@ -136,6 +136,16 @@ export const bookPhoneWhatsappAPI = async (bookingData) => {
   return res.json();
 };
 
+export const bookAppointmentPosition = async (bookingData) => {
+  const res = await fetch(`${API_BASE}/booking/position`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bookingData)
+  });
+  return res.json();
+};
+
+
 export const reallocateStorageAPI = async (reallocData) => {
   const res = await fetch(`${API_BASE}/reallocate-storage`, {
     method: 'POST',
