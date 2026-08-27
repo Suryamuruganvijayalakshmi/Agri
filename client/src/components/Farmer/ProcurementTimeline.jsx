@@ -55,19 +55,21 @@ export default function ProcurementTimeline({ timeline }) {
   };
 
   const stages = [
-    { key: 'BOOKED', label: 'Slot Booked' },
-    { key: 'CHECKED_IN', label: 'Yard Check-In' },
-    { key: 'WEIGHING', label: 'Weighbridge Net Weight' },
-    { key: 'QUALITY_VERIFICATION', label: 'Quality & Moisture Test' },
-    { key: 'APPROVAL_PENDING', label: 'MSP Administrative Approval' },
-    { key: 'APPROVED', label: 'Procurement Approved' },
-    { key: 'PAYMENT_PROCESSING', label: 'DBT Payment Processing' },
-    { key: 'PAID', label: 'Funds Disbursed' }
+    { key: 'ENTRY', label: '1. Entry (Gate Check-in & Pass Verification)' },
+    { key: 'SLOT_BOOK', label: '2. Slot Book (Theatre Seat & Package Reservation)' },
+    { key: 'WEIGHING', label: '3. Weighing (Weighbridge Gross & Net Weight)' },
+    { key: 'PAYMENT_FROM_OWNER', label: '4. Payment from Owner (Facility Purchaser Authorization)' },
+    { key: 'GOVT', label: '5. Govt (Treasury & DBT Bank Disbursement)' }
   ];
 
   const getStageIndex = (status) => {
+    if (status === 'ENTRY' || status === 'CHECKED_IN') return 0;
+    if (status === 'SLOT_BOOK' || status === 'BOOKED') return 1;
+    if (status === 'WEIGHING' || status === 'QUALITY_VERIFICATION') return 2;
+    if (status === 'PAYMENT_FROM_OWNER' || status === 'APPROVAL_PENDING' || status === 'APPROVED') return 3;
+    if (status === 'GOVT' || status === 'PAYMENT_PROCESSING' || status === 'PAID') return 4;
     const idx = stages.findIndex(s => s.key === status);
-    return idx === -1 ? 0 : idx;
+    return idx === -1 ? 1 : idx;
   };
 
   const currentIdx = getStageIndex(proc.status);

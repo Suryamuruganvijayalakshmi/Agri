@@ -337,6 +337,76 @@ app.post('/api/demo/run-scenario', (req, res) => {
   }
 });
 
+// 12. PRODUCTS API (GET & ADD NEW CROP/PRODUCT)
+app.get('/api/products', (req, res) => {
+  try {
+    const products = db.getAllProducts();
+    res.json({ success: true, products });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/products', (req, res) => {
+  try {
+    const result = db.addProduct(req.body);
+    if (!result.success) return res.status(400).json(result);
+    broadcastRealtimeUpdate('product_added', { product: result.product });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 13. TELEPHONE & WHATSAPP ENHANCEMENT BOOKING
+app.post('/api/booking/phone-whatsapp', (req, res) => {
+  try {
+    const result = db.bookAppointmentPhoneWhatsapp(req.body);
+    if (!result.success) return res.status(400).json(result);
+
+    broadcastRealtimeUpdate('slot_position_updated', {
+      slot_id: result.slot.id,
+      position_id: result.position.id,
+      position_number: result.position.position_number,
+      status: 'BOOKED',
+      appointment: result.appointment
+    });
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 14. DYNAMIC DEVIATION STORAGE RE-ALLOCATION API
+app.post('/api/reallocate-storage', (req, res) => {
+  try {
+    const { appointment_id, target_centre_id } = req.body;
+    if (!appointment_id || !target_centre_id) {
+      return res.status(400).json({ success: false, error: 'appointment_id and target_centre_id are required' });
+    }
+
+    const result = db.reallocateBookingStorage({ appointment_id, target_centre_id });
+    if (!result.success) return res.status(400).json(result);
+
+    broadcastRealtimeUpdate('storage_reallocated', result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 15. REALTIME LOAD PACKAGE METRICS MONITOR API
+app.get('/api/metrics/load-packages', (req, res) => {
+  try {
+    const metrics = db.getLoadPackageMetrics();
+    res.json({ success: true, metrics });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`====================================================`);

@@ -19,6 +19,7 @@ class AgriFlowDatabase {
     this.farmers = new Map();
     this.slots = new Map();
     this.slot_positions = new Map();
+    this.products = new Map();
     this.system_config = new Map([
       ['green_threshold', 60],
       ['yellow_threshold', 85],
@@ -797,6 +798,200 @@ class AgriFlowDatabase {
 
     return { success: true, message: 'Appointment cancelled and position freed to AVAILABLE.' };
   }
+
+  // --- 8. PRODUCT MANAGEMENT (CROP & CUSTOM PRODUCT ADDITION) ---
+  getAllProducts() {
+    if (this.products.size === 0) {
+      const defaultProducts = [
+        { id: 'prod-1', name: 'Paddy (Sona Masoori)', category: 'Grain', package_weight_kg: 50, msp_price_per_kg: 22, moisture_threshold_percent: 14, icon: '🌾' },
+        { id: 'prod-2', name: 'Ragi (Finger Millet)', category: 'Millet', package_weight_kg: 50, msp_price_per_kg: 35, moisture_threshold_percent: 12, icon: '🌱' },
+        { id: 'prod-3', name: 'Wheat (Durum)', category: 'Grain', package_weight_kg: 50, msp_price_per_kg: 23.5, moisture_threshold_percent: 13, icon: '🌾' },
+        { id: 'prod-4', name: 'Maize (Yellow Corn)', category: 'Coarse Grain', package_weight_kg: 60, msp_price_per_kg: 20.9, moisture_threshold_percent: 14, icon: '🌽' },
+        { id: 'prod-5', name: 'Sugarcane', category: 'Cash Crop', package_weight_kg: 100, msp_price_per_kg: 3.15, moisture_threshold_percent: 70, icon: '🎋' }
+      ];
+      defaultProducts.forEach(p => this.products.set(p.id, p));
+    }
+    return Array.from(this.products.values());
+  }
+
+  addProduct({ name, category = 'Custom Crop', package_weight_kg = 50, msp_price_per_kg = 25, moisture_threshold_percent = 13, icon = '🌿' }) {
+    if (!name) return { success: false, error: 'Product name is required' };
+    const prodId = `prod-${Date.now()}`;
+    const newProd = {
+      id: prodId,
+      name,
+      category,
+      package_weight_kg: Number(package_weight_kg) || 50,
+      msp_price_per_kg: Number(msp_price_per_kg) || 25,
+      moisture_threshold_percent: Number(moisture_threshold_percent) || 13,
+      icon,
+      is_custom: true,
+      created_at: new Date().toISOString()
+    };
+    this.products.set(prodId, newProd);
+    return { success: true, product: newProd };
+  }
+
+  // --- 6 & 7. TELEPHONE & WHATSAPP ENHANCEMENT WITH ATOMIC SYNC ---
+  bookAppointmentPhoneWhatsapp({ phone = '+91 98450 12345', textCommand = 'BOOK 5 PACKAGES MANDYA 10AM', farmer_name = 'Ramesh Gowda', channel = 'WHATSAPP', centre_id = 'centre-1', packages_count = 5, crop = 'Paddy (Sona Masoori)' }) {
+    // 1. Locate available slot & position in centre
+    const slots = this.getSlotsForCentre(centre_id);
+    const availableSlot = slots.find(s => s.available_positions_count >= packages_count) || slots.find(s => s.is_available) || slots[0];
+
+    if (!availableSlot) {
+      return { success: false, error: 'No available slots found for IVR/WhatsApp booking in selected yard.' };
+    }
+
+    // Find available position in slot
+    const positions = this.getSlotPositions(availableSlot.id);
+    const availPos = positions.find(p => p.status === 'AVAILABLE');
+    if (!availPos) {
+      return { success: false, error: 'Selected slot is fully booked.' };
+    }
+
+    const packageWeight = 50; // 50kg per seat package
+    const totalKg = Number(packages_count) * packageWeight;
+
+    // Perform atomic position booking
+    const result = this.bookAppointmentPosition({
+      farmer_id: 'F-PHONE-' + Math.floor(1000 + Math.random() * 9000),
+      farmer_name: `${farmer_name} (${channel})`,
+      slot_id: availableSlot.id,
+      position_id: availPos.id,
+      position_number: availPos.position_number,
+      crop,
+      quantity_kg: totalKg
+    });
+
+    if (!result.success) return result;
+
+    const message = `[AgriFlow ${channel} Bot] Success! Reserved Seat #${availPos.position_number} (${packages_count} Packages / ${totalKg} kg) at ${availableSlot.start_time}. Booking ID: ${result.appointment.booking_id}. Token: ${result.appointment.token_number}. Live map updated!`;
+
+    return {
+      success: true,
+      channel,
+      message,
+      appointment: result.appointment,
+      position: result.position,
+      slot: availableSlot
+    };
+  }
+
+  // --- 10. REALTIME DEVIATION STORAGE RE-ALLOCATION ENGINE ---
+  reallocateBookingStorage({ appointment_id, target_centre_id }) {
+    const appt = this.appointments.get(appointment_id);
+    if (!appt) return { success: false, error: 'Appointment not found.' };
+
+    const targetCentre = this.centres.get(target_centre_id);
+    if (!targetCentre) return { success: false, error: 'Target storage facility not found.' };
+
+    const oldCentreId = appt.centre_id;
+    const oldCentre = this.centres.get(oldCentreId);
+
+    // 1. Release old slot position
+    const oldPos = Array.from(this.slot_positions.values()).find(p => p.appointment_id === appointment_id);
+    if (oldPos) {
+      oldPos.status = 'AVAILABLE';
+      oldPos.appointment_id = null;
+      oldPos.booked_by = null;
+      this.slot_positions.set(oldPos.id, oldPos);
+    }
+
+    if (oldCentre) {
+      oldCentre.booked_capacity_kg = Math.max(0, oldCentre.booked_capacity_kg - appt.declared_quantity_kg);
+      oldCentre.queue_count = Math.max(0, oldCentre.queue_count - 1);
+      this.centres.set(oldCentreId, oldCentre);
+    }
+
+    // 2. Find new slot and position in target centre
+    const targetSlots = this.getSlotsForCentre(target_centre_id);
+    const newSlot = targetSlots.find(s => s.is_available) || targetSlots[0];
+    const newPositions = this.getSlotPositions(newSlot.id);
+    const newPos = newPositions.find(p => p.status === 'AVAILABLE');
+
+    // 3. Assign new position and centre
+    appt.centre_id = target_centre_id;
+    appt.centre_name = targetCentre.name;
+    if (newSlot) appt.slot_id = newSlot.id;
+    if (newPos) {
+      appt.position_number = newPos.position_number;
+      newPos.status = 'BOOKED';
+      newPos.appointment_id = appt.id;
+      newPos.booked_by = appt.farmer_id;
+      this.slot_positions.set(newPos.id, newPos);
+    }
+    appt.status = 'REALLOCATED_DEVIATION';
+    this.appointments.set(appointment_id, appt);
+
+    // 4. Update target centre capacity
+    targetCentre.booked_capacity_kg += appt.declared_quantity_kg;
+    targetCentre.queue_count += 1;
+    this.centres.set(target_centre_id, targetCentre);
+
+    // 5. Create Exception Log & Notification
+    const ex = this.createException({
+      farmer_id: appt.farmer_id,
+      farmer_name: appt.farmer_name,
+      centre_id: target_centre_id,
+      centre_name: targetCentre.name,
+      procurement_id: appt.id,
+      type: 'YARD_CONGESTION_REALLOCATION',
+      severity: 'MEDIUM',
+      reason: `Automated deviation re-allocation from ${oldCentre?.name || 'Yard'} to ${targetCentre.name} due to high queue density.`,
+      owner: 'Yard Dispatch Traffic Controller',
+      next_action: `Proceed directly to ${targetCentre.name} (Gate Counter #1)`
+    });
+
+    return {
+      success: true,
+      message: `Booking successfully transferred to ${targetCentre.name}! Seat Position #${newPos?.position_number || 1} locked.`,
+      appointment: appt,
+      new_centre: targetCentre,
+      exception: ex
+    };
+  }
+
+  // --- 11. REALTIME LOAD PACKAGE MONITOR ---
+  getLoadPackageMetrics() {
+    const centres = this.getAllCentres();
+    const appointments = Array.from(this.appointments.values());
+    const procurements = Array.from(this.procurements.values());
+
+    const packageWeightKg = 50; // 1 package seat = 50kg
+    const totalCapacityKg = centres.reduce((sum, c) => sum + c.daily_capacity_kg, 0);
+    const totalBookedKg = centres.reduce((sum, c) => sum + c.booked_capacity_kg, 0);
+    const totalProcuredKg = centres.reduce((sum, c) => sum + c.today_procured_kg, 0);
+
+    const totalPackagesCapacity = Math.round(totalCapacityKg / packageWeightKg);
+    const totalPackagesBooked = Math.round(totalBookedKg / packageWeightKg);
+    const totalPackagesWeighed = Math.round(totalProcuredKg / packageWeightKg);
+    const totalPackagesInTransit = Math.max(0, totalPackagesBooked - totalPackagesWeighed);
+
+    const warehouseUtilizationPercent = Math.min(100, Math.round((totalBookedKg / (totalCapacityKg || 1)) * 100));
+
+    // Per centre breakdown
+    const facilityLoadList = centres.slice(0, 8).map(c => ({
+      id: c.id,
+      name: c.name,
+      district: c.district,
+      booked_packages: Math.round(c.booked_capacity_kg / packageWeightKg),
+      max_packages: Math.round(c.daily_capacity_kg / packageWeightKg),
+      utilization_percent: c.utilization_percent,
+      color_status: c.color_status
+    }));
+
+    return {
+      totalPackagesCapacity,
+      totalPackagesBooked,
+      totalPackagesWeighed,
+      totalPackagesInTransit,
+      warehouseUtilizationPercent,
+      packageWeightKg,
+      facilityLoadList,
+      timestamp: new Date().toISOString()
+    };
+  }
 }
 
 export const db = new AgriFlowDatabase();
+

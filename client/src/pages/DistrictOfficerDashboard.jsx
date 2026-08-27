@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Building2, Activity, AlertTriangle, CheckCircle2, Clock, MapPin, ShieldCheck, ArrowUpRight } from 'lucide-react';
 import ProcurementMap from '../components/Map/ProcurementMap';
+import RealtimePackageMonitorWidget from '../components/Farmer/RealtimePackageMonitorWidget';
 import { fetchAdminMetrics } from '../services/api';
 
 export default function DistrictOfficerDashboard({ centres: liveCentres }) {
@@ -120,6 +121,9 @@ export default function DistrictOfficerDashboard({ centres: liveCentres }) {
           </div>
         </div>
       </div>
+
+      {/* Realtime Load Package Monitor */}
+      <RealtimePackageMonitorWidget />
     </div>
   );
 }

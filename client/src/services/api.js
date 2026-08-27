@@ -112,3 +112,41 @@ export const runDemoStep = async (step) => {
   });
   return res.json();
 };
+
+export const fetchProducts = async () => {
+  const res = await fetch(`${API_BASE}/products`);
+  return res.json();
+};
+
+export const addProductAPI = async (productData) => {
+  const res = await fetch(`${API_BASE}/products`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(productData)
+  });
+  return res.json();
+};
+
+export const bookPhoneWhatsappAPI = async (bookingData) => {
+  const res = await fetch(`${API_BASE}/booking/phone-whatsapp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bookingData)
+  });
+  return res.json();
+};
+
+export const reallocateStorageAPI = async (reallocData) => {
+  const res = await fetch(`${API_BASE}/reallocate-storage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reallocData)
+  });
+  return res.json();
+};
+
+export const fetchLoadPackageMetrics = async () => {
+  const res = await fetch(`${API_BASE}/metrics/load-packages`);
+  return res.json();
+};
+

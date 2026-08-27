@@ -128,8 +128,8 @@ export default function ProcurementMap({ centres, onSelectCentre, onBookCentre, 
                       </strong>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b', display: 'block' }}>Queue Length:</span>
-                      <strong style={{ color: '#0f172a' }}>{centre.queue_count} farmers</strong>
+                      <span style={{ color: '#64748b', display: 'block' }}>Package Seats:</span>
+                      <strong style={{ color: '#2563eb' }}>{Math.round(centre.remaining_capacity_kg / 50)} Available Seats</strong>
                     </div>
                     <div>
                       <span style={{ color: '#64748b', display: 'block' }}>Est. Wait:</span>
