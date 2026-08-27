@@ -1,0 +1,114 @@
+const API_BASE = '/api';
+
+export const fetchCentres = async () => {
+  const res = await fetch(`${API_BASE}/centres`);
+  return res.json();
+};
+
+export const fetchCentreById = async (id) => {
+  const res = await fetch(`${API_BASE}/centres/${id}`);
+  return res.json();
+};
+
+export const fetchRecommendations = async (lat = 12.5200, lng = 76.8900, quantity = 2500) => {
+  const res = await fetch(`${API_BASE}/recommendations?lat=${lat}&lng=${lng}&quantity=${quantity}`);
+  return res.json();
+};
+
+export const fetchGoIntelligence = async (centreId) => {
+  const res = await fetch(`${API_BASE}/go-intelligence/${centreId}`);
+  return res.json();
+};
+
+export const fetchSlots = async (centreId, dateStr) => {
+  const query = dateStr ? `?centre_id=${centreId}&date=${dateStr}` : `?centre_id=${centreId}`;
+  const res = await fetch(`${API_BASE}/slots${query}`);
+  return res.json();
+};
+
+export const fetchSlotPositions = async (slotId) => {
+  const res = await fetch(`${API_BASE}/slots/${slotId}/positions`);
+  return res.json();
+};
+
+export const bookAppointmentPositionAPI = async (bookingData) => {
+  const res = await fetch(`${API_BASE}/appointments/book-position`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bookingData)
+  });
+  return res.json();
+};
+
+export const cancelAppointmentAPI = async (appointmentId) => {
+  const res = await fetch(`${API_BASE}/appointments/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appointment_id: appointmentId })
+  });
+  return res.json();
+};
+
+export const bookAppointmentAtomic = async (bookingData) => {
+  const res = await fetch(`${API_BASE}/appointments/book`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bookingData)
+  });
+  return res.json();
+};
+
+export const fetchFarmerTimeline = async (farmerId) => {
+  const res = await fetch(`${API_BASE}/farmer/timeline/${farmerId}`);
+  return res.json();
+};
+
+export const updateOperatorCentreStatus = async (updateData) => {
+  const res = await fetch(`${API_BASE}/operator/centre-status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updateData)
+  });
+  return res.json();
+};
+
+export const updateProcurementStage = async (stageData) => {
+  const res = await fetch(`${API_BASE}/operator/update-stage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(stageData)
+  });
+  return res.json();
+};
+
+export const createException = async (exData) => {
+  const res = await fetch(`${API_BASE}/exceptions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(exData)
+  });
+  return res.json();
+};
+
+export const resolveException = async (exId, notes) => {
+  const res = await fetch(`${API_BASE}/exceptions/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ exception_id: exId, resolution_notes: notes })
+  });
+  return res.json();
+};
+
+export const fetchAdminMetrics = async () => {
+  const res = await fetch(`${API_BASE}/admin/metrics`);
+  return res.json();
+};
+
+export const runDemoStep = async (step) => {
+  const res = await fetch(`${API_BASE}/demo/run-scenario`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ step })
+  });
+  return res.json();
+};
