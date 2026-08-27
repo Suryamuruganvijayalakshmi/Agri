@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { socket } from '../../services/socket';
-import { fetchSlotPositions, bookAppointmentPositionAPI } from '../../services/api';
-import { CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw, Sparkles, QrCode, Box, Layers, Ticket } from 'lucide-react';
+import { fetchSlotPositions, bookPhoneWhatsappAPI } from '../../services/api';
+import { CheckCircle2, AlertTriangle, RefreshCw, Sparkles, QrCode, Warehouse, Box, PhoneCall, MessageSquare, Send, Smartphone } from 'lucide-react';
 
 export default function FarmerBookingPositionGrid({
   slot,
@@ -14,16 +14,21 @@ export default function FarmerBookingPositionGrid({
   onBookingSuccess
 }) {
   const [positions, setPositions] = useState([]);
-  const [selectedPosition, setSelectedPosition] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(null);
-  const [successAppt, setSuccessAppt] = useState(null);
   const [realtimePulse, setRealtimePulse] = useState(false);
+
+  // Phone / WhatsApp Booking State
+  const [channel, setChannel] = useState('WHATSAPP'); // 'WHATSAPP' | 'TELEPHONE'
+  const [phone, setPhone] = useState('+91 98450 12345');
+  const [packagesCount, setPackagesCount] = useState(5);
+  const [textCommand, setTextCommand] = useState('BOOK 5 PACKAGES MANDYA 10:00AM');
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingSuccessMsg, setBookingSuccessMsg] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
 
   const slotId = slot?.id || 'slot-centre-1-1000';
   const totalPositions = slot?.maximum_bookings || 20;
-  const packageWeight = 50; // 1 seat = 1 package (50kg)
+  const packageWeight = 50; // 1 square = 1 storage package area (50kg)
 
   // Load positions for the slot
   const loadPositions = async () => {
@@ -44,12 +49,11 @@ export default function FarmerBookingPositionGrid({
         return;
       }
 
-      // 2. Fallback to Express backend database
+      // 2. Fallback Express backend API
       const res = await fetchSlotPositions(slotId);
       if (res.success && res.positions) {
         setPositions(res.positions);
       } else {
-        // Fresh initial positions
         const freshPositions = Array.from({ length: totalPositions }, (_, i) => {
           const num = i + 1;
           return {
@@ -62,7 +66,7 @@ export default function FarmerBookingPositionGrid({
         setPositions(freshPositions);
       }
     } catch (err) {
-      console.error('Failed to load slot positions:', err);
+      console.error('Failed to load storage positions:', err);
     } finally {
       setLoading(false);
     }
@@ -70,11 +74,10 @@ export default function FarmerBookingPositionGrid({
 
   useEffect(() => {
     loadPositions();
-    setSelectedPosition(null);
 
     // Supabase Realtime
     const channelName = `realtime_slot_positions_${slotId}`;
-    const channel = supabase
+    const channelSub = supabase
       .channel(channelName)
       .on(
         'postgres_changes',
@@ -82,13 +85,8 @@ export default function FarmerBookingPositionGrid({
         (payload) => {
           setRealtimePulse(true);
           setTimeout(() => setRealtimePulse(false), 1200);
-
           if (payload.eventType === 'UPDATE' && payload.new) {
             setPositions(prev => prev.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p));
-            if (selectedPosition && selectedPosition.id === payload.new.id && payload.new.status === 'BOOKED') {
-              setSelectedPosition(null);
-              setErrorMsg('The seat position you selected was just booked by another farmer in real time. Please pick another seat.');
-            }
           } else {
             loadPositions();
           }
@@ -107,137 +105,55 @@ export default function FarmerBookingPositionGrid({
     socket.on('slot_position_updated', handleSocketUpdate);
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channelSub);
       socket.off('slot_position_updated', handleSocketUpdate);
     };
   }, [slotId]);
 
-  // Derived counts & Theatre metrics
+  // Derived counts & Storage Area Square metrics
   const bookedCount = positions.filter(p => p.status === 'BOOKED').length;
   const availableCount = positions.filter(p => p.status === 'AVAILABLE').length;
   const isFull = availableCount === 0 || bookedCount >= totalPositions;
   const bookedPercent = Math.round((bookedCount / (totalPositions || 1)) * 100);
 
-  // 1 Seat = 1 Package (Total Capacity)
-  const totalSlotCapacityKg = totalPositions * packageWeight; // e.g. 1000 kg per slot
-  const filledCapacityKg = bookedCount * packageWeight;
-
-  // Group 20 positions into Theatre Rows (Row A, Row B, Row C, Row D - 5 seats each)
-  const rows = [
-    { label: 'ROW A (FRONT GATE)', positions: positions.slice(0, 5) },
-    { label: 'ROW B (WEIGHBRIDGE BAY 1)', positions: positions.slice(5, 10) },
-    { label: 'ROW C (WEIGHBRIDGE BAY 2)', positions: positions.slice(10, 15) },
-    { label: 'ROW D (STORAGE DOCK)', positions: positions.slice(15, 20) }
+  // Group 20 positions into 4 Storage Zones (Zone A, B, C, D - 5 squares each)
+  const zones = [
+    { name: 'STORAGE ZONE A (NORTH BAY)', squares: positions.slice(0, 5) },
+    { name: 'STORAGE ZONE B (EAST BAY)', squares: positions.slice(5, 10) },
+    { name: 'STORAGE ZONE C (SOUTH BAY)', squares: positions.slice(10, 15) },
+    { name: 'STORAGE ZONE D (WEST BAY)', squares: positions.slice(15, 20) }
   ];
 
-  const handleSelectPosition = (pos) => {
-    if (pos.status !== 'AVAILABLE') return;
-    setErrorMsg(null);
-    setSelectedPosition(pos);
-  };
-
-  const handleConfirmBooking = async () => {
-    if (!selectedPosition) return;
+  const handlePhoneWhatsappBooking = async (e) => {
+    if (e) e.preventDefault();
     setBookingLoading(true);
     setErrorMsg(null);
+    setBookingSuccessMsg(null);
 
     try {
-      // Supabase RPC
-      const { data: supaRpcData, error: supaRpcErr } = await supabase.rpc('book_appointment_position', {
-        p_farmer_id: farmerId.startsWith('F-') ? 'f1f2f3f4-e5f6-7890-abcd-999999999999' : farmerId,
-        p_slot_id: slotId.startsWith('slot-') ? 's1s2s3s4-e5f6-7890-abcd-000000001000' : slotId,
-        p_crop_id: crop,
-        p_declared_quantity_kg: Number(quantityKg),
-        p_position_id: selectedPosition.id
-      });
-
-      if (!supaRpcErr && supaRpcData?.success) {
-        setSuccessAppt(supaRpcData.appointment);
-        if (onBookingSuccess) onBookingSuccess(supaRpcData.appointment);
-        loadPositions();
-        setBookingLoading(false);
-        return;
-      }
-
-      if (supaRpcData?.error) {
-        setErrorMsg(supaRpcData.error);
-        loadPositions();
-        setBookingLoading(false);
-        return;
-      }
-
-      // Express API Fallback
-      const res = await bookAppointmentPositionAPI({
-        farmer_id: farmerId,
+      const res = await bookPhoneWhatsappAPI({
+        phone,
         farmer_name: farmerName,
-        slot_id: slotId,
-        position_id: selectedPosition.id,
-        position_number: selectedPosition.position_number,
-        crop,
-        quantity_kg: Number(quantityKg)
+        textCommand,
+        channel,
+        centre_id: centre?.id || 'centre-1',
+        packages_count: Number(packagesCount),
+        crop
       });
 
       if (!res.success) {
-        setErrorMsg(res.error || 'Seat position already booked. Please select another seat.');
-        setSelectedPosition(null);
-        loadPositions();
+        setErrorMsg(res.error || 'Failed to process WhatsApp / Telephone booking.');
       } else {
-        setSuccessAppt(res.appointment);
-        if (onBookingSuccess) onBookingSuccess(res.appointment);
+        setBookingSuccessMsg(res.message);
         loadPositions();
+        if (onBookingSuccess) onBookingSuccess(res.appointment);
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Booking failed. Please try again.');
+      setErrorMsg(err.message || 'Error processing phone booking.');
     } finally {
       setBookingLoading(false);
     }
   };
-
-  if (successAppt) {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: '2rem', border: '2px solid #16a34a', borderRadius: '16px', background: '#ffffff' }}>
-        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem auto' }}>
-          <CheckCircle2 size={42} />
-        </div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.2rem' }}>
-          🎬 Theatre Seat #{successAppt.position_number} Booked & Reserved!
-        </h2>
-        <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-          1 Package Seat (50kg load capacity) locked in database with Supabase Realtime synchronization.
-        </p>
-
-        {/* Ticket Confirmation Card */}
-        <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', color: '#ffffff', borderRadius: '16px', padding: '1.5rem', textAlign: 'left', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.88rem', marginBottom: '1.5rem', border: '2px dashed #3b82f6', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)' }}>
-          <div><span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>BOOKING REF</span> <strong style={{ color: '#38bdf8', fontSize: '1rem' }}>{successAppt.booking_id || 'AGR-2026-9042'}</strong></div>
-          <div><span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>TOKEN CODE</span> <strong style={{ color: '#4ade80', fontSize: '1.2rem', fontFamily: 'monospace' }}>{successAppt.token_number}</strong></div>
-          <div><span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>THEATRE SEAT</span> <strong style={{ color: '#fbbf24', fontSize: '1.1rem' }}>Seat Position #{successAppt.position_number}</strong></div>
-          <div><span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>PROCUREMENT YARD</span> <strong style={{ color: '#ffffff' }}>{centre?.name || 'Mandya Central Yard'}</strong></div>
-          <div><span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>TIME SLOT</span> <strong>{slot?.start_time || '10:00 - 10:30 AM'}</strong></div>
-          <div><span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>PACKAGE LOAD</span> <strong>1 Package Seat ({packageWeight} kg)</strong></div>
-        </div>
-
-        {/* Secure QR Code Pass */}
-        <div style={{ background: '#f1f5f9', border: '1px dashed #94a3b8', borderRadius: '12px', padding: '1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
-          <div style={{ background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-            <QrCode size={64} color="#0f172a" />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700 }}>SECURE GATE PASS QR CODE</div>
-            <div style={{ fontSize: '0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#0f172a', margin: '0.2rem 0' }}>
-              {successAppt.qr_token || 'QR-AGR-2026-REF8841'}
-            </div>
-            <div style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 600 }}>
-              ✓ Scan at Weighbridge Gate for Instant Entry
-            </div>
-          </div>
-        </div>
-
-        <button onClick={() => { setSuccessAppt(null); setSelectedPosition(null); }} className="btn btn-primary btn-lg" style={{ width: '100%' }}>
-          Book Another Seat / Package
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '1.5rem', boxShadow: '0 4px 20px -2px rgba(0,0,0,0.08)' }}>
@@ -247,36 +163,36 @@ export default function FarmerBookingPositionGrid({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: 'Outfit, sans-serif', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Ticket size={22} color="#2563eb" /> 🎬 THEATRE-STYLE SLOT & SEAT BOOKING
+              <Warehouse size={24} color="#16a34a" /> 📦 WAREHOUSE STORAGE BAY AREA GRID
             </h2>
             {realtimePulse && (
-              <span style={{ fontSize: '0.7rem', background: '#dcfce7', color: '#15803d', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', transition: 'all 0.3s' }}>
+              <span style={{ fontSize: '0.7rem', background: '#dcfce7', color: '#15803d', padding: '0.2rem 0.6rem', borderRadius: '9999px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
                 <Sparkles size={12} className="animate-spin" /> Live Sync
               </span>
             )}
           </div>
-          <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.15rem 0 0 0' }}>
-            <strong>1 Seat = 1 Package ({packageWeight} kg total capacity)</strong>. Select an available theatre seat for slot <strong>{slot?.start_time || 'Selected Slot'}</strong>
+          <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
+            Each square represents 1 Storage Area Unit (50kg load capacity). <strong>Appointments are booked ONLY via WhatsApp or Telephone.</strong>
           </p>
         </div>
 
         <button onClick={loadPositions} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '0.4rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh Seats
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh Storage Bays
         </button>
       </div>
 
-      {/* Package Filling Capacity Bar (1 Seat = 1 Package Model) */}
+      {/* Storage Area Capacity Bar */}
       <div style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 700 }}>
           <span style={{ color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <Box size={16} color="#2563eb" /> PACKAGE CAPACITY FILLING (1 SEAT = 1 PACKAGE / 50KG)
+            <Box size={16} color="#16a34a" /> STORAGE BAY OCCUPATION (1 SQUARE = 1 STORAGE AREA UNIT / 50KG)
           </span>
           <span style={{ color: isFull ? '#dc2626' : '#16a34a' }}>
-            {bookedCount} / {totalPositions} PACKAGES FILLED ({availableCount} SEATS AVAILABLE)
+            {bookedCount} / {totalPositions} SQUARES OCCUPIED ({availableCount} OPEN STORAGE SQUARES)
           </span>
         </div>
 
-        {/* Visual Progress Bar */}
+        {/* Progress Bar */}
         <div style={{ width: '100%', height: '12px', background: '#e2e8f0', borderRadius: '9999px', overflow: 'hidden', display: 'flex', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)' }}>
           <div style={{ width: `${bookedPercent}%`, background: isFull ? '#ef4444' : '#f59e0b', transition: 'width 0.4s ease' }} />
           <div style={{ width: `${100 - bookedPercent}%`, background: '#22c55e', transition: 'width 0.4s ease' }} />
@@ -285,138 +201,214 @@ export default function FarmerBookingPositionGrid({
         {/* Legend */}
         <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.75rem', fontSize: '0.78rem', fontWeight: 700, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e', border: '1px solid #16a34a', display: 'inline-block' }} />
-            <span>🟢 AVAILABLE SEAT ({availableCount})</span>
+            <span style={{ width: '14px', height: '14px', borderRadius: '3px', background: '#f0fdf4', border: '2px solid #22c55e', display: 'inline-block' }} />
+            <span>🟩 AVAILABLE STORAGE SQUARE ({availableCount})</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444', border: '1px solid #dc2626', display: 'inline-block' }} />
-            <span>🔴 BOOKED PACKAGE ({bookedCount})</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6', border: '1px solid #1d4ed8', display: 'inline-block' }} />
-            <span>🔵 YOUR SELECTION ({selectedPosition ? `Seat #${selectedPosition.position_number}` : 'None'})</span>
+            <span style={{ width: '14px', height: '14px', borderRadius: '3px', background: '#fee2e2', border: '2px solid #ef4444', display: 'inline-block' }} />
+            <span>🟥 OCCUPIED VIA PHONE / WHATSAPP ({bookedCount})</span>
           </div>
         </div>
       </div>
 
-      {errorMsg && (
-        <div style={{ background: '#fee2e2', border: '1px solid #fecaca', color: '#991b1b', padding: '0.85rem', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <AlertTriangle size={20} style={{ flexShrink: 0 }} />
-          <div>{errorMsg}</div>
-        </div>
-      )}
-
-      {/* THEATRE STAGE / WEIGHBRIDGE COUNTER SCREEN BAR */}
-      <div style={{
-        background: 'linear-gradient(90deg, #1e293b 0%, #334155 50%, #1e293b 100%)',
-        color: '#f8fafc',
-        textAlign: 'center',
-        padding: '0.5rem 1rem',
-        borderRadius: '8px 8px 30px 30px',
-        fontSize: '0.75rem',
-        fontWeight: 800,
-        letterSpacing: '0.12em',
-        textTransform: 'uppercase',
-        marginBottom: '1.5rem',
-        borderBottom: '3px solid #3b82f6',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-      }}>
-        ━━━━ SCREEN / WEIGHBRIDGE GATE COUNTER DOCK ━━━━
-      </div>
-
-      {/* Visual Theatre Layout by Rows */}
+      {/* STORAGE FLOOR LAYOUT: GRID OF SQUARES */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
           <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem auto' }} />
-          Loading Theatre Seat Grid...
+          Loading Storage Floor Layout...
         </div>
       ) : (
-        <div>
-          {rows.map((row, rIdx) => (
-            <div key={rIdx} style={{ marginBottom: '1.25rem' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', letterSpacing: '0.05em', marginBottom: '0.4rem', borderBottom: '1px dashed #cbd5e1', paddingBottom: '0.2rem' }}>
-                {row.label}
+        <div style={{ marginBottom: '1.5rem' }}>
+          {zones.map((zone, zIdx) => (
+            <div key={zIdx} style={{ marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', letterSpacing: '0.05em', marginBottom: '0.4rem', borderBottom: '1px dashed #cbd5e1', paddingBottom: '0.2rem' }}>
+                {zone.name}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.75rem' }}>
-                {row.positions.map((pos) => {
-                  if (!pos) return null;
-                  const isBooked = pos.status === 'BOOKED';
-                  const isSelected = selectedPosition?.id === pos.id;
-                  const posNumStr = pos.position_number < 10 ? `0${pos.position_number}` : `${pos.position_number}`;
+              {/* GRID OF SQUARES */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.85rem' }}>
+                {zone.squares.map((sq) => {
+                  if (!sq) return null;
+                  const isOccupied = sq.status === 'BOOKED';
+                  const sqNumStr = sq.position_number < 10 ? `0${sq.position_number}` : `${sq.position_number}`;
 
                   return (
-                    <button
-                      type="button"
-                      key={pos.id}
-                      disabled={isBooked}
-                      onClick={() => handleSelectPosition(pos)}
+                    <div
+                      key={sq.id}
                       style={{
-                        padding: '0.85rem 0.5rem',
-                        borderRadius: '12px 12px 6px 6px',
-                        border: isSelected
-                          ? '3px solid #2563eb'
-                          : isBooked
-                          ? '1px solid #fca5a5'
-                          : '2px solid #86efac',
-                        background: isSelected
-                          ? 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)'
-                          : isBooked
-                          ? 'linear-gradient(180deg, #fee2e2 0%, #fca5a5 100%)'
-                          : 'linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%)',
-                        color: isBooked ? '#991b1b' : isSelected ? '#1e40af' : '#14532d',
-                        cursor: isBooked ? 'not-allowed' : 'pointer',
+                        aspectRatio: '1 / 1', // Perfect Square
+                        borderRadius: '12px',
+                        border: isOccupied ? '3px solid #ef4444' : '3px solid #22c55e',
+                        background: isOccupied
+                          ? 'linear-gradient(135deg, #fee2e2 0%, #fca5a5 100%)'
+                          : 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                        color: isOccupied ? '#991b1b' : '#14532d',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        padding: '0.5rem',
                         gap: '0.2rem',
-                        transition: 'all 0.2s ease',
-                        boxShadow: isSelected ? '0 0 0 4px rgba(37, 99, 235, 0.25), 0 4px 10px rgba(0,0,0,0.1)' : '0 2px 4px rgba(0,0,0,0.05)',
-                        position: 'relative'
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.06)',
+                        transition: 'all 0.3s ease'
                       }}
                     >
-                      {/* Seat Top Curve Cushion */}
-                      <span style={{ fontSize: '0.68rem', fontWeight: 800, fontFamily: 'monospace' }}>SEAT #{posNumStr}</span>
-                      <span style={{ fontSize: '1.2rem' }}>
-                        {isBooked ? '📦' : isSelected ? '🎟️' : '💺'}
+                      <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em', color: isOccupied ? '#991b1b' : '#166534' }}>
+                        BAY #{sqNumStr}
                       </span>
-                      <span style={{ fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase' }}>
-                        {isBooked ? 'FILLED' : isSelected ? 'CHOSEN' : 'OPEN'}
+                      <span style={{ fontSize: '1.6rem' }}>
+                        {isOccupied ? '📦' : '🟩'}
                       </span>
-                    </button>
+                      <span style={{ fontSize: '0.62rem', fontWeight: 900, textTransform: 'uppercase' }}>
+                        {isOccupied ? 'OCCUPIED' : 'OPEN AREA'}
+                      </span>
+                      <span style={{ fontSize: '0.58rem', opacity: 0.8 }}>
+                        {packageWeight} kg Area
+                      </span>
+                    </div>
                   );
                 })}
               </div>
             </div>
           ))}
-
-          {/* Selection Banner & Confirmation Button */}
-          {selectedPosition ? (
-            <div style={{ background: '#eff6ff', border: '2px solid #3b82f6', borderRadius: '12px', padding: '1rem', textAlign: 'center', marginTop: '1rem', boxShadow: '0 4px 12px rgba(37,99,235,0.15)' }}>
-              <div style={{ fontSize: '1rem', fontWeight: 800, color: '#1e40af', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                <Ticket size={20} /> Theatre Seat #{selectedPosition.position_number} Selected
-              </div>
-              <p style={{ fontSize: '0.8rem', color: '#3b82f6', margin: '0 0 0.85rem 0' }}>
-                Reserves 1 package load slot (50kg) with atomic locks and Supabase Realtime synchronization.
-              </p>
-              <button
-                type="button"
-                onClick={handleConfirmBooking}
-                disabled={bookingLoading}
-                className="btn btn-primary btn-lg"
-                style={{ width: '100%', background: '#2563eb', borderColor: '#1d4ed8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}
-              >
-                {bookingLoading ? 'Reserving Seat in PostgreSQL Database...' : '[ CONFIRM THEATRE SEAT BOOKING ]'}
-              </button>
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '0.85rem', background: '#f8fafc', borderRadius: '10px', color: '#64748b', fontSize: '0.85rem', fontWeight: 600, border: '1px dashed #cbd5e1' }}>
-              👇 Click any 💺 OPEN theatre seat above to pick your position.
-            </div>
-          )}
         </div>
       )}
+
+      {/* WHATSAPP & TELEPHONE BOOKING SIMULATOR FORM */}
+      <div style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)', border: '2px solid #2563eb', borderRadius: '16px', padding: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Smartphone size={20} color="#2563eb" /> 📞 BOOK STORAGE AREA VIA WHATSAPP & TELEPHONE
+            </h3>
+            <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '0.15rem 0 0 0' }}>
+              Web self-booking is disabled. Enter details below to trigger an automated Phone or WhatsApp booking!
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', background: '#ffffff', padding: '0.2rem', borderRadius: '8px', border: '1px solid #cbd5e1', gap: '0.2rem' }}>
+            <button
+              type="button"
+              onClick={() => setChannel('WHATSAPP')}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background: channel === 'WHATSAPP' ? '#22c55e' : 'transparent',
+                color: channel === 'WHATSAPP' ? '#ffffff' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem'
+              }}
+            >
+              <MessageSquare size={14} /> WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={() => setChannel('TELEPHONE')}
+              style={{
+                padding: '0.35rem 0.75rem',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                background: channel === 'TELEPHONE' ? '#2563eb' : 'transparent',
+                color: channel === 'TELEPHONE' ? '#ffffff' : '#64748b',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem'
+              }}
+            >
+              <PhoneCall size={14} /> Telephone IVR
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handlePhoneWhatsappBooking} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                Farmer Phone Number
+              </label>
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+91 98450 12345"
+                style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
+                required
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+                Storage Squares Needed (1 Sq = 50kg)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={packagesCount}
+                onChange={(e) => setPackagesCount(e.target.value)}
+                style={{ width: '100%', padding: '0.55rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
+              {channel === 'WHATSAPP' ? '💬 WhatsApp Command Message' : '🎙️ Telephone Speech Command'}
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                value={textCommand}
+                onChange={(e) => setTextCommand(e.target.value)}
+                placeholder="BOOK 5 PACKAGES MANDYA 10AM"
+                style={{ flex: 1, padding: '0.55rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                required
+              />
+              <button
+                type="submit"
+                disabled={bookingLoading}
+                style={{
+                  background: channel === 'WHATSAPP' ? '#16a34a' : '#2563eb',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '0.55rem 1.25rem',
+                  borderRadius: '8px',
+                  fontWeight: 800,
+                  fontSize: '0.85rem',
+                  cursor: bookingLoading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+              >
+                {bookingLoading ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
+                {channel === 'WHATSAPP' ? 'Send WhatsApp' : 'Dial IVR'}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {errorMsg && (
+          <div style={{ background: '#fee2e2', border: '1px solid #fecaca', color: '#991b1b', padding: '0.75rem', borderRadius: '8px', fontSize: '0.82rem', marginTop: '0.85rem' }}>
+            <AlertTriangle size={16} style={{ verticalAlign: 'middle', marginRight: '0.3rem' }} /> {errorMsg}
+          </div>
+        )}
+
+        {bookingSuccessMsg && (
+          <div style={{ marginTop: '0.85rem', background: '#f0fdf4', border: '1px solid #86efac', color: '#14532d', padding: '0.85rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle2 size={20} color="#16a34a" /> {bookingSuccessMsg}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

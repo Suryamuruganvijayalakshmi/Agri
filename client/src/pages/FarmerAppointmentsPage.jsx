@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Weight, CheckCircle2, AlertTriangle, ShieldCheck, MapPin, Sparkles, ChevronRight, Sprout, Smartphone, Activity } from 'lucide-react';
+import { Calendar, Clock, Weight, CheckCircle2, AlertTriangle, ShieldCheck, MapPin, Sparkles, ChevronRight, Sprout, Smartphone, Warehouse } from 'lucide-react';
 import { fetchSlots } from '../services/api';
 import { supabase } from '../lib/supabase';
 import FarmerBookingPositionGrid from '../components/Farmer/FarmerBookingPositionGrid';
@@ -25,7 +25,6 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
   const [loadingSlots, setLoadingSlots] = useState(true);
   
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [bookingMode, setBookingMode] = useState('THEATRE'); // 'THEATRE' | 'IVR_WHATSAPP'
 
   const centre = centres.find(c => c.id === selectedCentreId) || defaultCentre;
 
@@ -50,7 +49,7 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
         return;
       }
 
-      // 2. Fallback to Express backend API
+      // 2. Fallback Express backend API
       const res = await fetchSlots(selectedCentreId, date);
       if (res.success && res.slots) {
         setSlots(res.slots);
@@ -58,7 +57,6 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
           setSelectedSlot(res.slots.find(s => s.is_available) || res.slots[0]);
         }
       } else {
-        // Fallback slots if initializing fresh
         const mockSlots = [
           { id: `slot-${selectedCentreId}-0830`, start_time: '08:30 - 09:00 AM', maximum_bookings: 20, current_bookings: 8, is_available: true },
           { id: `slot-${selectedCentreId}-0900`, start_time: '09:00 - 09:30 AM', maximum_bookings: 20, current_bookings: 14, is_available: true },
@@ -87,53 +85,21 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <span style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              📍 Database-Backed Real-Time Position Booking
+              📍 WAREHOUSE STORAGE AREA GRID MONITOR (WHATSAPP & TELEPHONE ONLY)
             </span>
-            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0.25rem 0 0 0', fontFamily: 'Outfit, sans-serif' }}>
-              Farmer Slot Booking System
+            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0.25rem 0 0 0', fontFamily: 'Outfit, sans-serif', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Warehouse size={28} color="#4ade80" /> Storage Area Booking Monitor
             </h1>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '0.2rem 0 0 0' }}>
-              Theatre-style seat reservation (1 seat = 1 package / 50kg load) with Telephone & WhatsApp sync.
+              Appointments are booked <strong>STRICTLY via WhatsApp & Telephone Hotline</strong>. Each storage square represents 1 package area (50kg load).
             </p>
           </div>
 
-          {/* Mode Switcher */}
-          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.1)', padding: '0.25rem', borderRadius: '10px', gap: '0.3rem' }}>
-            <button
-              type="button"
-              onClick={() => setBookingMode('THEATRE')}
-              style={{
-                padding: '0.45rem 0.85rem',
-                borderRadius: '8px',
-                border: 'none',
-                fontSize: '0.8rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                background: bookingMode === 'THEATRE' ? '#2563eb' : 'transparent',
-                color: '#ffffff'
-              }}
-            >
-              🎬 Theatre Seat Grid
-            </button>
-            <button
-              type="button"
-              onClick={() => setBookingMode('IVR_WHATSAPP')}
-              style={{
-                padding: '0.45rem 0.85rem',
-                borderRadius: '8px',
-                border: 'none',
-                fontSize: '0.8rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                background: bookingMode === 'IVR_WHATSAPP' ? '#22c55e' : 'transparent',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.3rem'
-              }}
-            >
-              <Smartphone size={14} /> Phone / WhatsApp
-            </button>
+          <div style={{ background: 'rgba(22, 163, 74, 0.2)', border: '1px solid #22c55e', padding: '0.5rem 1rem', borderRadius: '10px', textAlign: 'right' }}>
+            <div style={{ fontSize: '0.7rem', color: '#86efac', fontWeight: 700 }}>BOOKING CHANNELS</div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Smartphone size={16} color="#4ade80" /> WhatsApp & Toll-Free IVR
+            </div>
           </div>
         </div>
       </div>
@@ -142,14 +108,14 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
       <div className="card" style={{ padding: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-            1. Select Procurement Yard & Product Details
+            1. Select Procurement Storage Yard & Crop Details
           </h3>
           <button
             type="button"
             onClick={() => setIsProductModalOpen(true)}
             style={{ background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', padding: '0.4rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
           >
-            <Sprout size={16} /> ➕ Add / Manage Crop Products
+            <Sprout size={16} /> ➕ Add / Manage Crops
           </button>
         </div>
 
@@ -157,7 +123,7 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
           {/* Facility Select */}
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
-              🏢 Select Procurement Yard / Cold Storage
+              🏢 Select Storage Facility / Procurement Yard
             </label>
             <select
               value={selectedCentreId}
@@ -222,132 +188,96 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
           </div>
         </div>
 
-        {/* Selected Cold Storage Facility Detail Badge Card */}
-        {centre && (
-          <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1rem', marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', fontSize: '0.85rem' }}>
-            <div>
-              <span style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 600, display: 'block' }}>COLD STORAGE NAME</span>
-              <strong style={{ color: '#0f172a' }}>{centre.name}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 600, display: 'block' }}>LOCATION / DISTRICT</span>
-              <strong style={{ color: '#16a34a' }}>📍 {centre.district || 'Mandya'}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 600, display: 'block' }}>FACILITY CAPACITY</span>
-              <strong style={{ color: '#2563eb' }}>{centre.daily_capacity_kg ? `${Math.round(centre.daily_capacity_kg/1000)} MT (${centre.daily_capacity_kg.toLocaleString()} kg)` : '3,500 MT'}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 600, display: 'block' }}>ITEM / PRODUCT</span>
-              <strong style={{ color: '#7c3aed' }}>{crop}</strong>
-            </div>
+        {/* Time Slot Selection */}
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem' }}>
+          2. Select Storage Time Slot
+        </h3>
+
+        {loadingSlots ? (
+          <div style={{ textAlign: 'center', padding: '1.5rem', color: '#64748b' }}>
+            Loading available storage time slots...
           </div>
-        )}
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            {slots.map(s => {
+              const max = s.maximum_bookings || 20;
+              const booked = s.current_bookings || 0;
+              const avail = Math.max(0, max - booked);
+              const isFull = booked >= max || !s.is_available;
+              const isSelected = selectedSlot?.id === s.id;
 
-        {/* Time Slot Cards Section (Only for Theatre Mode) */}
-        {bookingMode === 'THEATRE' && (
-          <div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.75rem' }}>
-              2. Select Appointment Time Slot
-            </h3>
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => {
+                    if (!isFull) setSelectedSlot(s);
+                  }}
+                  style={{
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    border: isSelected
+                      ? '2px solid #16a34a'
+                      : isFull
+                      ? '1px solid #e2e8f0'
+                      : '1px solid #cbd5e1',
+                    background: isSelected
+                      ? '#dcfce7'
+                      : isFull
+                      ? '#f8fafc'
+                      : 'white',
+                    opacity: isFull ? 0.65 : 1,
+                    cursor: isFull ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: isSelected ? '0 4px 12px rgba(22, 163, 74, 0.15)' : 'none'
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: '0.95rem', color: isFull ? '#64748b' : '#0f172a' }}>
+                    {s.start_time}
+                  </div>
+                  
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, margin: '0.3rem 0', color: isFull ? '#dc2626' : '#15803d' }}>
+                    {isFull ? `${max} / ${max} SQUARES OCCUPIED` : `${booked} / ${max} SQUARES OCCUPIED`}
+                  </div>
 
-            {loadingSlots ? (
-              <div style={{ textAlign: 'center', padding: '1.5rem', color: '#64748b' }}>
-                Loading available database time slots...
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                {slots.map(s => {
-                  const max = s.maximum_bookings || 20;
-                  const booked = s.current_bookings || 0;
-                  const avail = Math.max(0, max - booked);
-                  const isFull = booked >= max || !s.is_available;
-                  const isSelected = selectedSlot?.id === s.id;
+                  <div style={{ fontSize: '0.75rem', color: isFull ? '#991b1b' : '#166534', fontWeight: 600 }}>
+                    {isFull ? 'FULL' : `${avail} OPEN SQUARES`}
+                  </div>
 
-                  return (
-                    <div
-                      key={s.id}
-                      onClick={() => {
-                        if (!isFull) setSelectedSlot(s);
-                      }}
-                      style={{
-                        padding: '0.85rem',
-                        borderRadius: '12px',
-                        border: isSelected
-                          ? '2px solid #16a34a'
-                          : isFull
-                          ? '1px solid #e2e8f0'
-                          : '1px solid #cbd5e1',
-                        background: isSelected
-                          ? '#dcfce7'
-                          : isFull
-                          ? '#f8fafc'
-                          : 'white',
-                        opacity: isFull ? 0.65 : 1,
-                        cursor: isFull ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.2s ease',
-                        boxShadow: isSelected ? '0 4px 12px rgba(22, 163, 74, 0.15)' : 'none'
-                      }}
-                    >
-                      <div style={{ fontWeight: 800, fontSize: '0.95rem', color: isFull ? '#64748b' : '#0f172a' }}>
-                        {s.start_time}
-                      </div>
-                      
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, margin: '0.3rem 0', color: isFull ? '#dc2626' : '#15803d' }}>
-                        {isFull ? `${max} / ${max} BOOKED` : `${booked} / ${max} BOOKED`}
-                      </div>
-
-                      <div style={{ fontSize: '0.75rem', color: isFull ? '#991b1b' : '#166534', fontWeight: 600 }}>
-                        {isFull ? 'FULL' : `${avail} AVAILABLE`}
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={isFull}
-                        style={{
-                          marginTop: '0.65rem',
-                          width: '100%',
-                          padding: '0.4rem',
-                          borderRadius: '6px',
-                          border: 'none',
-                          background: isFull ? '#cbd5e1' : isSelected ? '#16a34a' : '#f1f5f9',
-                          color: isFull ? '#475569' : isSelected ? 'white' : '#0f172a',
-                          fontWeight: 700,
-                          fontSize: '0.78rem',
-                          cursor: isFull ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {isFull ? '[ FULL ]' : isSelected ? '✓ SELECTED' : '[ VIEW POSITIONS ]'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                  <button
+                    type="button"
+                    disabled={isFull}
+                    style={{
+                      marginTop: '0.65rem',
+                      width: '100%',
+                      padding: '0.4rem',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: isFull ? '#cbd5e1' : isSelected ? '#16a34a' : '#f1f5f9',
+                      color: isFull ? '#475569' : isSelected ? 'white' : '#0f172a',
+                      fontWeight: 700,
+                      fontSize: '0.78rem',
+                      cursor: isFull ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {isFull ? '[ FULL ]' : isSelected ? '✓ SELECTED' : '[ VIEW SQUARES ]'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* 3. Booking View - Theatre Seat Grid vs Phone / WhatsApp Widget */}
-      {bookingMode === 'THEATRE' ? (
-        selectedSlot && (
-          <FarmerBookingPositionGrid
-            slot={selectedSlot}
-            centre={centre}
-            farmerId="F-1042"
-            farmerName="Ramesh Gowda"
-            crop={crop}
-            quantityKg={quantity}
-            onBookingSuccess={() => {
-              loadSlots();
-            }}
-          />
-        )
-      ) : (
-        <PhoneWhatsappBookingWidget
-          centreId={selectedCentreId}
-          centreName={centre?.name}
-          onBookingCompleted={() => {
+      {/* 3. Storage Bay Area Grid of Squares & WhatsApp / Phone Hotline Simulator */}
+      {selectedSlot && (
+        <FarmerBookingPositionGrid
+          slot={selectedSlot}
+          centre={centre}
+          farmerId="F-1042"
+          farmerName="Ramesh Gowda"
+          crop={crop}
+          quantityKg={quantity}
+          onBookingSuccess={() => {
             loadSlots();
           }}
         />
