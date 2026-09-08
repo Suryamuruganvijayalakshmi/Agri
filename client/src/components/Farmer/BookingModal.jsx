@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { X, Calendar, Clock, Weight, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
 import FarmerBookingPositionGrid from './FarmerBookingPositionGrid';
-import { fetchProducts } from '../../services/api';
+import { fetchProducts, fetchSlots } from '../../services/api';
 
 export default function BookingModal({ centre, farmerId = 'F-1042', farmerName = 'Ramesh Gowda', onClose, onBookingSuccess }) {
   const [crop, setCrop] = useState('Paddy (Sona Masoori)');
   const [products, setProducts] = useState([]);
-  const [quantity, setQuantity] = useState(2500);
+  const [quantity, setQuantity] = useState(1000);
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(true);
+  const [slotError, setSlotError] = useState('');
+  const [selectedSlotId, setSelectedSlotId] = useState('');
   const [date, setDate] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -25,13 +29,27 @@ export default function BookingModal({ centre, farmerId = 'F-1042', farmerName =
     return () => { active = false; };
   }, []);
 
-  const selectedSlot = {
-    id: `slot-${centre?.id || 'centre-1'}-1000`,
-    start_time: '10:00 - 10:30 AM',
-    maximum_bookings: 20,
-    current_bookings: 13,
-    is_available: true
-  };
+  useEffect(() => {
+    let active = true;
+    setSlotsLoading(true);
+    setSlotError('');
+    fetchSlots(centre?.id || 'centre-1', date).then((result) => {
+      if (!active) return;
+      const availableSlots = (result.slots || []).filter((slot) => slot.is_available && !slot.is_past);
+      setSlots(availableSlots);
+      setSelectedSlotId((current) => availableSlots.some((slot) => slot.id === current)
+        ? current
+        : availableSlots[0]?.id || '');
+    }).catch(() => {
+      if (active) setSlotError('Unable to load slots for this date. Please refresh and try again.');
+    }).finally(() => {
+      if (active) setSlotsLoading(false);
+    });
+
+    return () => { active = false; };
+  }, [centre?.id, date]);
+
+  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) || null;
 
   return (
     <div className="modal-overlay" style={{ zIndex: 1000 }}>
@@ -72,7 +90,8 @@ export default function BookingModal({ centre, farmerId = 'F-1042', farmerName =
             </label>
             <input
               type="number"
-              min="100"
+              min="1000"
+              step="1000"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
               style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
@@ -90,22 +109,43 @@ export default function BookingModal({ centre, farmerId = 'F-1042', farmerName =
               style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
             />
           </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.2rem' }}>
+              Available Slot (1,000 kg)
+            </label>
+            <select
+              value={selectedSlotId}
+              onChange={(event) => setSelectedSlotId(event.target.value)}
+              disabled={slotsLoading || slots.length === 0}
+              style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+            >
+              {slotsLoading && <option value="">Loading available slots...</option>}
+              {!slotsLoading && slots.length === 0 && <option value="">No available slots for this date</option>}
+              {slots.map((slot) => (
+                <option key={slot.id} value={slot.id}>{slot.start_time} • {slot.available_positions_count} bays open</option>
+              ))}
+            </select>
+          </div>
         </div>
 
+        {slotError && <div style={{ marginBottom: '1rem', padding: '0.65rem 0.8rem', borderRadius: '8px', background: '#fee2e2', color: '#991b1b', fontSize: '0.82rem', fontWeight: 700 }}>{slotError}</div>}
+        {!slotsLoading && !slotError && slots.length === 0 && <div style={{ marginBottom: '1rem', padding: '0.65rem 0.8rem', borderRadius: '8px', background: '#fef3c7', color: '#92400e', fontSize: '0.82rem', fontWeight: 700 }}>No open 1,000 kg slots are available on this date.</div>}
+
         {/* Real-Time Position Grid Component */}
-        <FarmerBookingPositionGrid
-          slot={selectedSlot}
-          centre={centre}
-          farmerId={farmerId}
-          farmerName={farmerName}
-          crop={crop}
-          quantityKg={quantity}
-          appointmentDate={date}
-          onBookingSuccess={(appt) => {
-            if (onBookingSuccess) onBookingSuccess(appt);
-            setTimeout(() => onClose(), 2500);
-          }}
-        />
+        {selectedSlot && <FarmerBookingPositionGrid
+            slot={selectedSlot}
+            centre={centre}
+            farmerId={farmerId}
+            farmerName={farmerName}
+            crop={crop}
+            quantityKg={quantity}
+            appointmentDate={date}
+            onBookingSuccess={(appt) => {
+              if (onBookingSuccess) onBookingSuccess(appt);
+              setTimeout(() => onClose(), 2500);
+            }}
+          />}
       </div>
     </div>
   );
