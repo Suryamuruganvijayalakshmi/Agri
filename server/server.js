@@ -89,6 +89,11 @@ const broadcastRealtimeUpdate = async (eventType, payload) => {
   }
 };
 
+// Connect DB notification triggers to real-time Web Push broadcast
+db.setNotificationEmitter((notif) => {
+  broadcastRealtimeUpdate('notification_pushed', notif);
+});
+
 // ============================================================
 // AUTHENTICATION API ROUTES
 // ============================================================
@@ -510,6 +515,12 @@ app.post('/api/centres/:centreId/queue/weighment', async (req, res) => {
     const result = await db.recordWeighment(req.params.centreId, req.body.appointment_id, Number(req.body.actual_weight_kg));
     if (!result.success) return res.status(400).json(result);
     await broadcastRealtimeUpdate('queue_updated', { centre_id: req.params.centreId });
+    await broadcastRealtimeUpdate('notification_pushed', {
+      title: `⚖️ Gross Weighment Recorded`,
+      message: `Token ${result.appointment?.token_number || 'Farmer'}: Loaded ${Number(req.body.actual_weight_kg).toLocaleString()} kg recorded on weighbridge.`,
+      icon: '⚖️',
+      type: 'info'
+    });
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -522,6 +533,12 @@ app.post('/api/centres/:centreId/queue/quality', async (req, res) => {
     const result = await db.recordQuality(req.params.centreId, req.body.appointment_id, req.body.grade, req.body.moisture);
     if (!result.success) return res.status(400).json(result);
     await broadcastRealtimeUpdate('queue_updated', { centre_id: req.params.centreId });
+    await broadcastRealtimeUpdate('notification_pushed', {
+      title: `🔬 Quality Inspection Passed`,
+      message: `Token ${result.appointment?.token_number || 'Farmer'}: Assessed as ${req.body.grade} (Moisture: ${req.body.moisture}%). Approved for MSP.`,
+      icon: '🧪',
+      type: 'info'
+    });
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -534,6 +551,12 @@ app.post('/api/centres/:centreId/queue/complete', async (req, res) => {
     const result = await db.completeProcurement(req.params.centreId, req.body.appointment_id);
     if (!result.success) return res.status(400).json(result);
     await broadcastRealtimeUpdate('queue_updated', { centre_id: req.params.centreId });
+    await broadcastRealtimeUpdate('notification_pushed', {
+      title: `✅ Procurement Finished & Discharged`,
+      message: `Token ${result.appointment?.token_number || 'Farmer'}: Truck discharged, MSP voucher generated, sent to DBT payment queue.`,
+      icon: '🌾',
+      type: 'success'
+    });
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -546,6 +569,12 @@ app.post('/api/payment/update/:paymentId', async (req, res) => {
     const result = await db.updatePaymentStatus(req.params.paymentId, req.body.new_status);
     if (!result.success) return res.status(400).json(result);
     await broadcastRealtimeUpdate('payment_updated', { payment: result.payment });
+    await broadcastRealtimeUpdate('notification_pushed', {
+      title: `💳 DBT Payment ${req.body.new_status}`,
+      message: `Direct Benefit Transfer of ₹${Number(result.payment?.amount || 0).toLocaleString()} is now ${req.body.new_status}.`,
+      icon: req.body.new_status === 'PAID' ? '💰' : '💳',
+      type: req.body.new_status === 'PAID' ? 'success' : 'info'
+    });
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -557,6 +586,16 @@ app.get('/api/centres/:centreId/payments', async (req, res) => {
   try {
     const payments = await db.getCentrePayments(req.params.centreId);
     res.json({ success: true, payments });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET CENTRE REAL ANALYTICS & STATEMENTS SUMMARY
+app.get('/api/centres/:centreId/analytics-summary', async (req, res) => {
+  try {
+    const summary = await db.getCentreAnalyticsSummary(req.params.centreId);
+    res.json(summary);
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -339,3 +339,11 @@ export const submitQualityInspectionAPI = async (qualData) => {
   });
   return res.json();
 };
+
+export const fetchCentreAnalyticsSummaryAPI = async (centreId = 'centre-1') => {
+  const res = await fetch(`${API_BASE}/centres/${centreId}/analytics-summary`, {
+    headers: authHeaders()
+  });
+  return res.json();
+};
+

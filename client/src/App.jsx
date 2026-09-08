@@ -33,6 +33,11 @@ import DemoStoryRunner from './components/Demo/DemoStoryRunner';
 
 import { socket } from './services/socket';
 import { fetchCentres, resetDatabaseAPI } from './services/api';
+import {
+  initNotificationService,
+  requestNotificationPermission,
+  getNotificationPermission
+} from './services/notificationManager';
 import { Sprout, LogOut, User, MapPin, Calendar, Clock, CreditCard, ShieldCheck, Zap, Globe, Activity, Bell, RefreshCw, Menu, X, BarChart3, FileSpreadsheet, FileText } from 'lucide-react';
 import { translations } from './i18n/translations';
 
@@ -42,6 +47,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
   const [resetting, setResetting] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
   const navigate = useNavigate();
   const location = useLocation();
   const t = translations[lang] || translations.en;
@@ -99,7 +105,26 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
       {/* Top Banner */}
       <div style={{ background: '#166534', padding: '0.4rem 1rem', fontSize: '0.8rem', textAlign: 'center', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
         <span>"Don't just give farmers a token. Give them a predictable procurement journey."</span>
-        <div style={{ display: 'flex', gap: '0.4rem' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          {notifPermission !== 'granted' ? (
+            <button
+              onClick={async () => {
+                const p = await requestNotificationPermission();
+                setNotifPermission(p);
+              }}
+              style={{ background: '#0284c7', color: 'white', border: 'none', padding: '0.15rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+              title="Click to enable desktop & background notifications for bookings, calls, weights, and DBT credits"
+            >
+              <Bell size={12} /> Enable Live Alerts
+            </button>
+          ) : (
+            <span
+              style={{ background: 'rgba(255,255,255,0.2)', color: '#bbf7d0', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+              title="Real-time Web Push alerts active even when window is in background"
+            >
+              🔔 Alerts Active
+            </span>
+          )}
           <button
             onClick={onOpenDemoModal}
             style={{ background: '#f59e0b', color: '#78350f', border: 'none', padding: '0.15rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
@@ -486,6 +511,7 @@ function MainAppContent() {
   const [lang, setLang] = useState('en');
   const [centres, setCentres] = useState([]);
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const [toast, setToast] = useState(null);
   const { role } = useAuth();
   const navigate = useNavigate();
 
@@ -502,12 +528,66 @@ function MainAppContent() {
 
   useEffect(() => {
     loadMasterCentres();
+    initNotificationService();
+
+    const handleToast = (e) => {
+      setToast(e.detail);
+      setTimeout(() => {
+        setToast(prev => (prev?.timestamp === e.detail.timestamp ? null : prev));
+      }, 6500);
+    };
+
+    window.addEventListener('agriflow:toast', handleToast);
     socket.on('centres_updated', (updated) => setCentres(updated));
-    return () => socket.off('centres_updated');
+
+    return () => {
+      window.removeEventListener('agriflow:toast', handleToast);
+      socket.off('centres_updated');
+    };
   }, []);
 
   return (
     <div className="app-container">
+      {/* Floating Push Notification Toast */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '1rem',
+            right: '1rem',
+            zIndex: 99999,
+            background: '#0f172a',
+            color: '#f8fafc',
+            padding: '0.85rem 1.15rem',
+            borderRadius: '10px',
+            boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.45), 0 6px 12px -2px rgba(0, 0, 0, 0.25)',
+            border: toast.type === 'success' ? '1.5px solid #22c55e' : '1.5px solid #38bdf8',
+            maxWidth: '390px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.75rem',
+            animation: 'fadeIn 0.25s ease-in'
+          }}
+        >
+          <div style={{ fontSize: '1.6rem', lineHeight: 1 }}>{toast.icon || '🔔'}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: toast.type === 'success' ? '#4ade80' : '#38bdf8', marginBottom: '0.2rem' }}>
+              {toast.title}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#cbd5e1', lineHeight: 1.4 }}>
+              {toast.message}
+            </div>
+          </div>
+          <button
+            onClick={() => setToast(null)}
+            style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.25rem', padding: '0 0.2rem', lineHeight: 1 }}
+            title="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <NavigationBar
         lang={lang}
         setLang={setLang}
