@@ -54,9 +54,10 @@ function NavigationBar({ onOpenDemoModal }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Close mobile drawer when route changes
+  // Close mobile drawer when route changes and trigger site-wide translation update
   useEffect(() => {
     setMobileMenuOpen(false);
+    window.dispatchEvent(new Event('agriflow:route_changed'));
   }, [location.pathname]);
 
   // Fetch unread notification count for farmers
@@ -135,19 +136,6 @@ function NavigationBar({ onOpenDemoModal }) {
               </button>
             </>
           )}
-          <button
-            onClick={onOpenDemoModal}
-            style={{ background: '#f59e0b', color: '#78350f', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
-          >
-            <Zap size={12} /> {t.demoStoryBtn}
-          </button>
-          <button
-            onClick={handleResetSite}
-            disabled={resetting}
-            style={{ background: '#dc2626', color: 'white', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
-          >
-            <RefreshCw size={12} className={resetting ? 'spin' : ''} /> {resetting ? t.resetting : t.resetSite}
-          </button>
         </div>
       </div>
 

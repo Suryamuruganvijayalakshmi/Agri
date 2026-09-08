@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { translations } from '../i18n/translations';
+import { applyDomTranslations } from '../services/domTranslator';
 
 const LanguageContext = createContext();
 
@@ -57,13 +58,14 @@ export function LanguageProvider({ children }) {
       localStorage.setItem('agriflow_lang', newLang);
       document.documentElement.lang = newLang;
 
-      // 1. Set Google Translate cookie
+      // 1. Instant client-side DOM translation across all pages
+      applyDomTranslations(newLang);
+
+      // 2. Set Google Translate cookie
       setGoogleTranslateCookie(newLang);
 
-      // 2. Trigger Google Translate dropdown
+      // 3. Trigger Google Translate dropdown if available
       const triggered = triggerGoogleTranslateElement(newLang);
-
-      // If Google Translate is still initializing, retry smoothly
       if (!triggered) {
         let attempts = 0;
         const interval = setInterval(() => {
@@ -78,11 +80,15 @@ export function LanguageProvider({ children }) {
     }
   }, []);
 
-  // Sync Google Translate with current language on mount & updates
+  // Sync translations & observers on mount, updates, and navigation
   useEffect(() => {
     document.documentElement.lang = lang;
     setGoogleTranslateCookie(lang);
 
+    // Apply instantaneous DOM translation
+    applyDomTranslations(lang);
+
+    // Sync Google translate combo if active
     if (lang !== 'en') {
       let attempts = 0;
       const interval = setInterval(() => {
@@ -91,10 +97,24 @@ export function LanguageProvider({ children }) {
           clearInterval(interval);
         }
       }, 350);
-      return () => clearInterval(interval);
     } else {
       triggerGoogleTranslateElement('en');
     }
+
+    // Re-apply on route changes (popstate or clicks on links)
+    const handleRouteChange = () => {
+      setTimeout(() => {
+        applyDomTranslations(lang);
+      }, 100);
+    };
+
+    window.addEventListener('popstate', handleRouteChange);
+    window.addEventListener('agriflow:route_changed', handleRouteChange);
+
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+      window.removeEventListener('agriflow:route_changed', handleRouteChange);
+    };
   }, [lang]);
 
   // Robust translation accessor with automatic fallback to English

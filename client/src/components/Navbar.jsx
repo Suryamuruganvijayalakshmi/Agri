@@ -10,12 +10,6 @@ export default function Navbar({ role, setRole, isConnected, onOpenDemoModal }) 
       {/* Top Banner Tagline */}
       <div style={{ background: '#166534', padding: '0.4rem 1rem', fontSize: '0.8rem', textAlign: 'center', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
         <span>"Don't just give farmers a token. Give them a predictable procurement journey."</span>
-        <button 
-          onClick={onOpenDemoModal}
-          style={{ background: '#f59e0b', color: '#78350f', border: 'none', padding: '0.15rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
-        >
-          <Zap size={12} /> Run 5-Min Pitch Demo
-        </button>
       </div>
 
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
