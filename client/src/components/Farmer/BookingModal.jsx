@@ -1,14 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Calendar, Clock, Weight, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
 import FarmerBookingPositionGrid from './FarmerBookingPositionGrid';
+import { fetchProducts } from '../../services/api';
 
 export default function BookingModal({ centre, farmerId = 'F-1042', farmerName = 'Ramesh Gowda', onClose, onBookingSuccess }) {
   const [crop, setCrop] = useState('Paddy (Sona Masoori)');
+  const [products, setProducts] = useState([]);
   const [quantity, setQuantity] = useState(2500);
   const [date, setDate] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
+
+  useEffect(() => {
+    let active = true;
+    fetchProducts().then((result) => {
+      if (!active || !result.success || !result.products?.length) return;
+      setProducts(result.products);
+      setCrop((current) => result.products.some((product) => product.name === current)
+        ? current
+        : result.products[0].name);
+    }).catch(() => {});
+
+    return () => { active = false; };
+  }, []);
 
   const selectedSlot = {
     id: `slot-${centre?.id || 'centre-1'}-1000`,
@@ -44,10 +59,10 @@ export default function BookingModal({ centre, farmerId = 'F-1042', farmerName =
               onChange={(e) => setCrop(e.target.value)}
               style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
             >
-              <option value="Paddy (Sona Masoori)">Paddy (Sona Masoori)</option>
-              <option value="Ragi (Finger Millet)">Ragi (Finger Millet)</option>
-              <option value="Maize (Corn)">Maize (Corn)</option>
-              <option value="Wheat">Wheat</option>
+              {products.length === 0 && <option value="Paddy (Sona Masoori)">Paddy (Sona Masoori)</option>}
+              {products.map((product) => (
+                <option key={product.id} value={product.name}>{product.name}</option>
+              ))}
             </select>
           </div>
 
