@@ -1,9 +1,9 @@
 import React from 'react';
 import { Sprout, ShieldCheck, User, Building2, Landmark, Globe, Activity, Zap } from 'lucide-react';
-import { translations } from '../i18n/translations';
+import { useLanguage } from '../context/LanguageContext';
 
-export default function Navbar({ role, setRole, lang, setLang, isConnected, onOpenDemoModal }) {
-  const t = translations[lang] || translations.en;
+export default function Navbar({ role, setRole, isConnected, onOpenDemoModal }) {
+  const { lang, setLang, t } = useLanguage();
 
   return (
     <header style={{ background: '#0f172a', color: 'white', borderBottom: '1px solid #1e293b' }}>

@@ -1,23 +1,28 @@
-// AGRIFlow Notification & Web Push Manager
+// AGRIFlow Notification & Web Push Manager with Mobile Lockscreen Support
 import { socket } from './socket';
 
 let swRegistration = null;
 
 // Initialize Service Worker
 export async function initNotificationService() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') return null;
 
   if ('serviceWorker' in navigator) {
     try {
       swRegistration = await navigator.serviceWorker.register('/sw.js');
-      console.log('[AGRIFlow Push] Service Worker registered successfully:', swRegistration.scope);
+      console.log('[AGRIFlow Push] Service Worker registered:', swRegistration.scope);
+
+      // Wait for SW to be ready and active
+      await navigator.serviceWorker.ready;
+      return swRegistration;
     } catch (err) {
-      console.warn('[AGRIFlow Push] Service Worker registration failed:', err.message);
+      console.warn('[AGRIFlow Push] Service Worker registration error:', err.message);
     }
   }
 
   // Setup Socket.IO listener for incoming real-time notifications
   setupSocketNotificationListeners();
+  return null;
 }
 
 // Check notification permission state
@@ -36,8 +41,9 @@ export async function requestNotificationPermission() {
     if (permission === 'granted') {
       triggerPushNotification(
         '🔔 AGRIFlow Notifications Active',
-        'You will now receive live alerts for booked slots, queue calls, quality checks, and DBT payments even when this window is in the background!',
-        '🔔'
+        'Live mobile lockscreen & background alerts enabled for bookings, weighment, quality checks, and DBT payments!',
+        '🔔',
+        'success'
       );
     }
     return permission;
@@ -69,43 +75,103 @@ export function playNotificationSound() {
     osc.start();
     osc.stop(ctx.currentTime + 0.4);
   } catch {
-    // AudioContext blocked by browser autoplay policy until interaction
+    // AudioContext blocked by browser autoplay policy until user interacts
   }
 }
 
-// Trigger both Desktop/Mobile Browser Notification and In-App Toast
-export function triggerPushNotification(title, message, icon = '🌾', type = 'info') {
+// Trigger both Desktop/Mobile Browser Lockscreen Notification and In-App Toast
+export function triggerPushNotification(title, message, icon = '🌾', type = 'info', targetUrl = '/') {
+  // 1. Play chime
   playNotificationSound();
 
-  // 1. In-App Floating Toast Notification event
+  // 2. In-App Floating Toast Notification event
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('agriflow:toast', {
-      detail: { title, message, icon, type, timestamp: Date.now() }
+      detail: { title, message, icon, type, timestamp: Date.now(), url: targetUrl }
     }));
   }
 
-  // 2. Native Browser Desktop / Background Push Notification
+  // 3. Native Browser System / Mobile Lockscreen Push Notification
   if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+    const notificationPayload = {
+      body: message,
+      icon: '/favicon.ico',
+      badge: '/favicon.ico',
+      tag: `agriflow-alert-${Date.now()}`,
+      vibrate: [300, 100, 300, 100, 400],
+      requireInteraction: true,
+      renotify: true,
+      silent: false,
+      url: targetUrl
+    };
+
     try {
-      if (swRegistration && 'showNotification' in swRegistration) {
-        swRegistration.showNotification(title, {
-          body: message,
-          icon: '/favicon.ico',
-          badge: '/favicon.ico',
-          tag: `agriflow-${Date.now()}`,
-          vibrate: [200, 100, 200]
+      // Primary: Send message to Service Worker controller (best for Android Mobile Lockscreen)
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title: title,
+          options: notificationPayload
         });
-      } else {
-        new Notification(title, {
-          body: message,
-          icon: '/favicon.ico',
-          tag: `agriflow-${Date.now()}`
+      }
+
+      // Secondary: Call swRegistration.showNotification directly if available
+      if (swRegistration && 'showNotification' in swRegistration) {
+        swRegistration.showNotification(title, notificationPayload);
+      } else if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then((reg) => {
+          reg.showNotification(title, notificationPayload);
+        }).catch(() => {
+          // Fallback to standard desktop Notification constructor
+          try {
+            new Notification(title, { body: message, icon: '/favicon.ico', tag: notificationPayload.tag });
+          } catch {}
         });
       }
     } catch (err) {
-      console.warn('[AGRIFlow Notification] Native show failed:', err.message);
+      console.warn('[AGRIFlow Notification] Native show error:', err.message);
     }
   }
+}
+
+// Helper to trigger a delayed notification so the user can lock their mobile screen to verify!
+export function testLockscreenNotification(seconds = 4) {
+  if (typeof window === 'undefined') return;
+
+  if (Notification.permission !== 'granted') {
+    requestNotificationPermission().then((perm) => {
+      if (perm === 'granted') {
+        runLockscreenCountdown(seconds);
+      } else {
+        alert('Please enable notifications in your browser permissions to test mobile lockscreen alerts.');
+      }
+    });
+  } else {
+    runLockscreenCountdown(seconds);
+  }
+}
+
+function runLockscreenCountdown(seconds) {
+  // Toast prompting user to lock their phone
+  window.dispatchEvent(new CustomEvent('agriflow:toast', {
+    detail: {
+      title: '📱 Testing Mobile Lockscreen Alert',
+      message: `Lock your mobile phone right now! Your test lockscreen alert will ring in ${seconds} seconds...`,
+      icon: '🔒',
+      type: 'info',
+      timestamp: Date.now()
+    }
+  }));
+
+  setTimeout(() => {
+    triggerPushNotification(
+      '🌾 AGRIFlow Lockscreen Alert: Token #104 Called!',
+      'Your token #104 has been called for Weighment Station #1. Proceed to weighbridge immediately.',
+      '⚖️',
+      'success',
+      '/farmer/queue'
+    );
+  }, seconds * 1000);
 }
 
 // Listen to Socket.IO events and push alerts
@@ -115,7 +181,13 @@ function setupSocketNotificationListeners() {
   // Generic direct notification from server
   socket.on('notification_pushed', (data) => {
     if (!data) return;
-    triggerPushNotification(data.title || 'AGRIFlow Alert', data.message || 'Operational update received.', data.icon || '🔔', data.type || 'info');
+    triggerPushNotification(
+      data.title || 'AGRIFlow Alert',
+      data.message || 'Operational update received.',
+      data.icon || '🔔',
+      data.type || 'info',
+      data.url || '/'
+    );
   });
 
   // When a farmer books a slot
@@ -128,7 +200,8 @@ function setupSocketNotificationListeners() {
       `📅 Slot Booked: Token ${token}`,
       `${farmer} booked ${Number(qty).toLocaleString()} kg of ${appt?.crop_type || 'Produce'}. Arrival queue updated!`,
       '🚜',
-      'success'
+      'success',
+      '/operator/queue'
     );
   });
 
@@ -137,11 +210,23 @@ function setupSocketNotificationListeners() {
     if (data?.status === 'CALLED' || data?.token_number) {
       triggerPushNotification(
         `📢 Token ${data.token_number || 'Next'} Called!`,
-        `Proceed to Counter / Weighbridge immediately.`,
+        `Your turn has arrived. Proceed to Weighbridge / Counter immediately.`,
         '⚖️',
-        'info'
+        'info',
+        '/farmer/queue'
       );
     }
+  });
+
+  // When weighment is recorded
+  socket.on('weighment_completed', (data) => {
+    triggerPushNotification(
+      `⚖️ Weighment Recorded: ${data?.actual_weight_kg || 'Loaded'} kg`,
+      `Token ${data?.token_number || ''} recorded actual gross weight. Moving to quality lab check.`,
+      '⚖️',
+      'info',
+      '/farmer/procurement'
+    );
   });
 
   // When DBT payment updates
@@ -152,7 +237,8 @@ function setupSocketNotificationListeners() {
         `💳 DBT Payment: ${p.status}`,
         `Payment of ₹${Number(p.amount || 0).toLocaleString()} for ${p.farmer_name || 'Farmer'} is ${p.status}.`,
         p.status === 'PAID' ? '💰' : '💳',
-        p.status === 'PAID' ? 'success' : 'info'
+        p.status === 'PAID' ? 'success' : 'info',
+        '/farmer/payments'
       );
     }
   });
@@ -160,6 +246,12 @@ function setupSocketNotificationListeners() {
   // When centre status or capacity changes
   socket.on('centre_notification', (data) => {
     if (!data) return;
-    triggerPushNotification(data.title || 'Centre Notice', data.message || '', '🏢', 'info');
+    triggerPushNotification(
+      data.title || 'Centre Notice',
+      data.message || '',
+      '🏢',
+      'info',
+      '/farmer/centres'
+    );
   });
 }

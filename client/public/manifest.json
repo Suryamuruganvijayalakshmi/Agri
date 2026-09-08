@@ -1,0 +1,17 @@
+{
+  "short_name": "AGRIFlow",
+  "name": "AGRIFlow - Real-Time Procurement Operations & Transparency Platform",
+  "description": "Don't just give farmers a token. Give them a predictable procurement journey.",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#166534",
+  "background_color": "#0f172a"
+}

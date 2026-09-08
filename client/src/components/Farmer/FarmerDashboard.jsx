@@ -8,9 +8,11 @@ import {
 } from 'lucide-react';
 import { fetchFarmerDashboard } from '../../services/api';
 import useRealtimePolling from '../../hooks/useRealtimePolling';
+import { useLanguage } from '../../context/LanguageContext';
 
-export default function FarmerDashboard({ centres = [], lang = 'en' }) {
+export default function FarmerDashboard({ centres = [] }) {
   const { user, profile } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const activeFarmerId = user?.id || 'default-farmer';
@@ -33,15 +35,15 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
   const lastPayment = dashData?.last_payment || null;
   const history = dashData?.history || [];
 
-  // Stage progress mapping
+  // Stage progress mapping with live multilingual support
   const stages = [
-    { key: 'BOOKED', label: 'Booked', desc: 'Slot confirmed' },
-    { key: 'WAITING', label: 'In Queue', desc: 'Awaiting turn' },
-    { key: 'CALLED', label: 'Called', desc: 'Proceed to counter' },
-    { key: 'PROCESSING', label: 'Processing', desc: 'Counter active' },
-    { key: 'WEIGHMENT', label: 'Weighment', desc: 'Produce weighed' },
-    { key: 'QUALITY_CHECK', label: 'Quality', desc: 'Lab verification' },
-    { key: 'COMPLETED', label: 'Completed', desc: 'Payment issued' }
+    { key: 'BOOKED', label: t.stageBooked, desc: t.stageBookedDesc },
+    { key: 'WAITING', label: t.stageWaiting, desc: t.stageWaitingDesc },
+    { key: 'CALLED', label: t.stageCalled, desc: t.stageCalledDesc },
+    { key: 'PROCESSING', label: t.stageProcessing, desc: t.stageProcessingDesc },
+    { key: 'WEIGHMENT', label: t.stageWeighment, desc: t.stageWeighmentDesc },
+    { key: 'QUALITY_CHECK', label: t.stageQuality, desc: t.stageQualityDesc },
+    { key: 'COMPLETED', label: t.stageCompleted, desc: t.stageCompletedDesc }
   ];
 
   const currentStatus = activeBooking?.status || (lastCompleted ? 'COMPLETED' : 'NOT_BOOKED');
@@ -58,7 +60,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
               <Sparkles size={14} /> Mandya District Farmer Procurement Portal
             </div>
             <h1 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '0.3rem 0 0 0', fontFamily: 'Outfit, sans-serif' }}>
-              Welcome, {farmerName}
+              {t.welcome}, {farmerName}
             </h1>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '0.2rem 0 0 0' }}>
               Farmer ID: <strong style={{ color: '#e2e8f0' }}>{activeFarmerId}</strong>
@@ -69,7 +71,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', fontWeight: 800, color: '#4ade80', background: 'rgba(74, 222, 128, 0.1)', border: '1px solid rgba(74, 222, 128, 0.3)', padding: '0.35rem 0.75rem', borderRadius: '9999px' }}>
-              <Zap size={12} /> {realtimePulse ? 'UPDATING...' : 'LIVE REAL-TIME'}
+              <Zap size={12} /> {realtimePulse ? 'UPDATING...' : t.liveRealtime}
             </span>
             <button
               onClick={refresh}
@@ -83,7 +85,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
               className="btn btn-primary btn-sm"
               style={{ padding: '0.4rem 0.85rem' }}
             >
-              🏢 Find Centres
+              {t.navCentres}
             </Link>
           </div>
         </div>
@@ -95,13 +97,13 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
         {/* 1. Active Token & Centre */}
         <div className="card" style={{ padding: '1.25rem', borderLeft: activeBooking ? '5px solid #16a34a' : '5px solid #94a3b8' }}>
           <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            MY ACTIVE TOKEN
+            {t.yourToken}
           </div>
           <div style={{ fontSize: '2rem', fontWeight: 900, color: activeBooking ? '#16a34a' : '#64748b', margin: '0.3rem 0', fontFamily: 'monospace' }}>
             {activeBooking ? activeBooking.token_number : 'NO TOKEN'}
           </div>
           <div style={{ fontSize: '0.825rem', color: '#334155', fontWeight: 600 }}>
-            {activeBooking ? activeBooking.centre_name : 'No active booking today'}
+            {activeBooking ? activeBooking.centre_name : t.noActiveBooking}
           </div>
           {activeBooking ? (
             <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.3rem' }}>
@@ -109,7 +111,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
             </div>
           ) : (
             <Link to="/farmer/appointments" style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.8rem', color: '#16a34a', fontWeight: 700 }}>
-              + Book a Slot Now →
+              + {t.bookSlotNow} →
             </Link>
           )}
         </div>
@@ -117,7 +119,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
         {/* 2. Live Queue Position */}
         <div className="card" style={{ padding: '1.25rem', borderLeft: queueData?.your_status === 'CALLED' ? '5px solid #ef4444' : '5px solid #3b82f6' }}>
           <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            LIVE QUEUE POSITION
+            {t.currentQueue}
           </div>
           <div style={{ fontSize: '1.8rem', fontWeight: 900, color: queueData?.your_status === 'CALLED' ? '#ef4444' : '#1e293b', margin: '0.3rem 0' }}>
             {queueData?.your_status === 'CALLED' ? (
@@ -134,7 +136,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
             {queueData?.your_status === 'CALLED'
               ? 'Token called! Proceed to counter.'
               : queueData?.your_position > 0
-              ? `Est. Wait: ~${queueData.your_estimated_wait} mins (${queueData.total_in_queue} total)`
+              ? `${t.estimatedWait}: ~${queueData.your_estimated_wait} mins (${queueData.total_in_queue} total)`
               : 'Queue updates in real-time'}
           </div>
           {activeBooking && (
@@ -147,7 +149,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
         {/* 3. Procurement Status */}
         <div className="card" style={{ padding: '1.25rem', borderLeft: '5px solid #8b5cf6' }}>
           <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            PROCUREMENT STATUS
+            {t.status}
           </div>
           <div style={{ margin: '0.3rem 0' }}>
             <span style={{
@@ -167,14 +169,14 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
             {activeProcurement?.quality_grade && activeProcurement.quality_grade !== 'Pending' ? ` • ${activeProcurement.quality_grade}` : ''}
           </div>
           <Link to="/farmer/procurement" style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.8rem', color: '#7c3aed', fontWeight: 700 }}>
-            Full Stage Timeline →
+            {t.navProcurement} →
           </Link>
         </div>
 
         {/* 4. DBT Payment Status */}
         <div className="card" style={{ padding: '1.25rem', borderLeft: (activePayment?.status === 'PAID' || lastPayment?.status === 'PAID') ? '5px solid #16a34a' : '5px solid #f59e0b' }}>
           <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            DBT PAYMENT PAYOUT
+            {t.paymentStatus}
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#15803d', margin: '0.3rem 0' }}>
             ₹{Number(activePayment?.amount || lastPayment?.amount || ((activeBooking?.declared_quantity_kg || 2500) * 22)).toLocaleString()}
@@ -202,7 +204,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Live Procurement Stage Tracker
+                {t.activeProcurementJourney}
               </h3>
               <p style={{ fontSize: '0.825rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
                 Synced directly with {activeBooking.centre_name} officer weighbridge and quality station
@@ -306,7 +308,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
           style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>🏢 Find Best Centre</div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>🏢 {t.navCentres}</div>
             <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>View live wait times and capacity across all centres</div>
           </div>
           <ChevronRight size={20} color="#16a34a" />
@@ -318,7 +320,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
           style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>📅 Book Storage Slot</div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>📅 {t.navAppointments}</div>
             <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>Select date, storage square, and lock in your token</div>
           </div>
           <ChevronRight size={20} color="#16a34a" />
@@ -330,7 +332,7 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
           style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>💳 DBT Payment Vouchers</div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>💳 {t.navPayments}</div>
             <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>Track state treasury payouts and bank receipts</div>
           </div>
           <ChevronRight size={20} color="#16a34a" />
@@ -340,23 +342,23 @@ export default function FarmerDashboard({ centres = [], lang = 'en' }) {
       {/* ── RECENT BOOKINGS & PROCUREMENT HISTORY ───────────────── */}
       <div className="card" style={{ padding: '1.5rem' }}>
         <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: '0 0 1rem 0' }}>
-          My Procurement Records ({history.length})
+          {t.recentTransactions} ({history.length})
         </h3>
         {history.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '0.9rem' }}>
-            No previous bookings found for your account. Click <strong>"Book Storage Slot"</strong> to schedule your first procurement.
+            No previous bookings found for your account. Click <strong>"{t.bookSlotNow}"</strong> to schedule your first procurement.
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                  <th style={{ padding: '0.6rem' }}>Token</th>
-                  <th style={{ padding: '0.6rem' }}>Centre</th>
+                  <th style={{ padding: '0.6rem' }}>{t.yourToken}</th>
+                  <th style={{ padding: '0.6rem' }}>{t.centre}</th>
                   <th style={{ padding: '0.6rem' }}>Date</th>
-                  <th style={{ padding: '0.6rem' }}>Crop</th>
-                  <th style={{ padding: '0.6rem' }}>Quantity</th>
-                  <th style={{ padding: '0.6rem' }}>Status</th>
+                  <th style={{ padding: '0.6rem' }}>{t.cropType}</th>
+                  <th style={{ padding: '0.6rem' }}>{t.quantity}</th>
+                  <th style={{ padding: '0.6rem' }}>{t.status}</th>
                 </tr>
               </thead>
               <tbody>

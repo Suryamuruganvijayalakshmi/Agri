@@ -36,13 +36,15 @@ import { fetchCentres, resetDatabaseAPI } from './services/api';
 import {
   initNotificationService,
   requestNotificationPermission,
-  getNotificationPermission
+  getNotificationPermission,
+  testLockscreenNotification
 } from './services/notificationManager';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Sprout, LogOut, User, MapPin, Calendar, Clock, CreditCard, ShieldCheck, Zap, Globe, Activity, Bell, RefreshCw, Menu, X, BarChart3, FileSpreadsheet, FileText } from 'lucide-react';
-import { translations } from './i18n/translations';
 
-function NavigationBar({ lang, setLang, onOpenDemoModal }) {
+function NavigationBar({ onOpenDemoModal }) {
   const { user, profile, role, signOut } = useAuth();
+  const { lang, setLang, t } = useLanguage();
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -50,7 +52,6 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
   const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
   const navigate = useNavigate();
   const location = useLocation();
-  const t = translations[lang] || translations.en;
 
   // Close mobile drawer when route changes
   useEffect(() => {
@@ -103,40 +104,48 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
   return (
     <header style={{ background: '#0f172a', color: 'white', borderBottom: '1px solid #1e293b', sticky: 'top', top: 0, zIndex: 1000 }}>
       {/* Top Banner */}
-      <div style={{ background: '#166534', padding: '0.4rem 1rem', fontSize: '0.8rem', textAlign: 'center', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <span>"Don't just give farmers a token. Give them a predictable procurement journey."</span>
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+      <div style={{ background: '#166534', padding: '0.4rem 1rem', fontSize: '0.8rem', textAlign: 'center', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+        <span className="top-banner-quote">"{t.tagline}"</span>
+        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
           {notifPermission !== 'granted' ? (
             <button
               onClick={async () => {
                 const p = await requestNotificationPermission();
                 setNotifPermission(p);
               }}
-              style={{ background: '#0284c7', color: 'white', border: 'none', padding: '0.15rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-              title="Click to enable desktop & background notifications for bookings, calls, weights, and DBT credits"
+              style={{ background: '#0284c7', color: 'white', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+              title="Click to enable desktop & mobile lockscreen notifications"
             >
-              <Bell size={12} /> Enable Live Alerts
+              <Bell size={12} /> {t.enableAlerts}
             </button>
           ) : (
-            <span
-              style={{ background: 'rgba(255,255,255,0.2)', color: '#bbf7d0', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
-              title="Real-time Web Push alerts active even when window is in background"
-            >
-              🔔 Alerts Active
-            </span>
+            <>
+              <span
+                style={{ background: 'rgba(255,255,255,0.2)', color: '#bbf7d0', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+              >
+                {t.alertsActive}
+              </span>
+              <button
+                onClick={() => testLockscreenNotification(4)}
+                style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                title="Click to test live mobile lockscreen alert (lock your phone to test!)"
+              >
+                {t.testLockscreen}
+              </button>
+            </>
           )}
           <button
             onClick={onOpenDemoModal}
-            style={{ background: '#f59e0b', color: '#78350f', border: 'none', padding: '0.15rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+            style={{ background: '#f59e0b', color: '#78350f', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
           >
-            <Zap size={12} /> Run 5-Min Pitch Demo
+            <Zap size={12} /> {t.demoStoryBtn}
           </button>
           <button
             onClick={handleResetSite}
             disabled={resetting}
-            style={{ background: '#dc2626', color: 'white', border: 'none', padding: '0.15rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+            style={{ background: '#dc2626', color: 'white', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
           >
-            <RefreshCw size={12} className={resetting ? 'spin' : ''} /> {resetting ? 'Resetting...' : 'Reset to Fresh Site'}
+            <RefreshCw size={12} className={resetting ? 'spin' : ''} /> {resetting ? t.resetting : t.resetSite}
           </button>
         </div>
       </div>
@@ -179,25 +188,26 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
           {/* Guest navigation */}
           {!user && (
             <div style={{ display: 'flex', gap: '0.35rem', fontSize: '0.85rem' }}>
-              <Link to="/farmer/centres" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>🏢 Centres</Link>
-              <Link to="/farmer/map" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>🗺️ Facilities Map</Link>
+              <Link to="/farmer/centres" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navCentres}</Link>
+              <Link to="/farmer/map" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navMap}</Link>
             </div>
           )}
 
           {role === 'FARMER' && (
             <div style={{ display: 'flex', gap: '0.35rem', fontSize: '0.85rem' }}>
-              <Link to="/farmer/dashboard" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Dashboard</Link>
-              <Link to="/farmer/my-farm" style={{ color: '#4ade80', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 800 }}>🌾 My Farm</Link>
-              <Link to="/farmer/centres" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>🏢 Centres</Link>
-              <Link to="/farmer/map" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>🗺️ Facilities Map</Link>
-              <Link to="/farmer/appointments" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Book Slot</Link>
-              <Link to="/farmer/queue" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Live Queue</Link>
-              <Link to="/farmer/procurement" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Timeline</Link>
-              <Link to="/farmer/payments" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>DBT Payments</Link>
+              <Link to="/farmer/dashboard" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navDashboard}</Link>
+              <Link to="/farmer/my-farm" style={{ color: '#4ade80', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 800 }}>{t.navMyFarm}</Link>
+              <Link to="/farmer/centres" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navCentres}</Link>
+              <Link to="/farmer/map" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navMap}</Link>
+              <Link to="/farmer/appointments" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navAppointments}</Link>
+              <Link to="/farmer/queue" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navQueue}</Link>
+              <Link to="/farmer/procurement" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navProcurement}</Link>
+              <Link to="/farmer/payments" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navPayments}</Link>
 
               <Link to="/farmer/notifications"
                 onClick={() => setUnreadCount(0)}
                 style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600, position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+                title={t.navNotifications}
               >
                 <Bell size={17} />
                 {unreadCount > 0 && (
@@ -227,7 +237,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
                   fontWeight: 700
                 }}
               >
-                🖥️ Console
+                {t.navConsole}
               </Link>
               <Link
                 to="/operator/queue"
@@ -241,110 +251,29 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
                   fontWeight: 700
                 }}
               >
-                🔔 Queue
+                {t.navQueue}
               </Link>
-              <Link
-                to="/operator/weighment"
-                style={{
-                  color: location.pathname === '/operator/weighment' ? '#06b6d4' : '#cbd5e1',
-                  background: location.pathname === '/operator/weighment' ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
-                  border: location.pathname === '/operator/weighment' ? '1px solid #0891b2' : '1px solid transparent',
-                  padding: '0.35rem 0.65rem',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  fontWeight: 700
-                }}
-              >
-                ⚖️ Weighbridge
-              </Link>
-              <Link
-                to="/operator/quality"
-                style={{
-                  color: location.pathname === '/operator/quality' ? '#10b981' : '#cbd5e1',
-                  background: location.pathname === '/operator/quality' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                  border: location.pathname === '/operator/quality' ? '1px solid #059669' : '1px solid transparent',
-                  padding: '0.35rem 0.65rem',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  fontWeight: 700
-                }}
-              >
-                🔬 Quality
-              </Link>
-              <Link
-                to="/operator/payments"
-                style={{
-                  color: location.pathname === '/operator/payments' ? '#a855f7' : '#cbd5e1',
-                  background: location.pathname === '/operator/payments' ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
-                  border: location.pathname === '/operator/payments' ? '1px solid #9333ea' : '1px solid transparent',
-                  padding: '0.35rem 0.65rem',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  fontWeight: 700
-                }}
-              >
-                💳 Payments
-              </Link>
-              <Link
-                to="/operator/analytics"
-                style={{
-                  color: location.pathname === '/operator/analytics' ? '#38bdf8' : '#cbd5e1',
-                  background: location.pathname === '/operator/analytics' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                  border: location.pathname === '/operator/analytics' ? '1px solid #0284c7' : '1px solid transparent',
-                  padding: '0.35rem 0.65rem',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  fontWeight: 700
-                }}
-              >
-                📊 Analytics
-              </Link>
-              <Link
-                to="/operator/statements"
-                style={{
-                  color: location.pathname === '/operator/statements' ? '#fbbf24' : '#cbd5e1',
-                  background: location.pathname === '/operator/statements' ? 'rgba(251, 191, 36, 0.15)' : 'transparent',
-                  border: location.pathname === '/operator/statements' ? '1px solid #d97706' : '1px solid transparent',
-                  padding: '0.35rem 0.65rem',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  fontWeight: 700
-                }}
-              >
-                📑 Statements
-              </Link>
-              <Link
-                to="/govt/crop-intelligence"
-                style={{
-                  color: location.pathname === '/govt/crop-intelligence' ? '#fbbf24' : '#f59e0b',
-                  background: location.pathname === '/govt/crop-intelligence' ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                  border: location.pathname === '/govt/crop-intelligence' ? '1px solid #d97706' : '1px solid transparent',
-                  padding: '0.35rem 0.65rem',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  fontWeight: 700
-                }}
-              >
-                ✨ Crop AI
-              </Link>
+              <Link to="/operator/analytics" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navAnalytics}</Link>
+              <Link to="/operator/statements" style={{ color: '#fbbf24', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navStatements}</Link>
+              <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navCropAI}</Link>
             </div>
           )}
 
           {role === 'QUALITY_INSPECTOR' && (
             <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.85rem' }}>
               <Link to="/inspector/inspections" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Quality Lab</Link>
-              <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>✨ Crop Forecast & AI</Link>
+              <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navCropAI}</Link>
             </div>
           )}
 
           {(role === 'DISTRICT_OFFICER' || role === 'STATE_ADMIN') && (
             <div style={{ display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}>
-              <Link to="/admin/overview" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>🏛️ Overview</Link>
-              <Link to="/operator/analytics" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>📊 Analytics</Link>
-              <Link to="/operator/statements" style={{ color: '#fbbf24', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>📑 Statements</Link>
-              <Link to="/farmer/my-farm" style={{ color: '#4ade80', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>🌾 My Farm</Link>
-              <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>✨ Crop AI</Link>
-              <Link to="/admin/centres" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Centres</Link>
+              <Link to="/admin/overview" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navOverview}</Link>
+              <Link to="/operator/analytics" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navAnalytics}</Link>
+              <Link to="/operator/statements" style={{ color: '#fbbf24', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navStatements}</Link>
+              <Link to="/farmer/my-farm" style={{ color: '#4ade80', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navMyFarm}</Link>
+              <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navCropAI}</Link>
+              <Link to="/admin/centres" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navCentres}</Link>
             </div>
           )}
 
@@ -371,12 +300,12 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
               className="btn btn-secondary btn-sm"
               style={{ background: '#334155', color: 'white', border: 'none' }}
             >
-              <LogOut size={14} /> Sign Out ({profile?.full_name?.split(' ')[0] || user.email?.split('@')[0]})
+              <LogOut size={14} /> {t.signOut} ({profile?.full_name?.split(' ')[0] || user.email?.split('@')[0]})
             </button>
           ) : (
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <Link to="/farmer/login" className="btn btn-primary btn-sm">Farmer Login</Link>
-              <Link to="/government/login" className="btn btn-secondary btn-sm" style={{ background: '#1e293b', color: 'white', border: '1px solid #334155' }}>Officer Login</Link>
+              <Link to="/farmer/login" className="btn btn-primary btn-sm">{t.farmerLogin}</Link>
+              <Link to="/government/login" className="btn btn-secondary btn-sm" style={{ background: '#1e293b', color: 'white', border: '1px solid #334155' }}>{t.officerLogin}</Link>
             </div>
           )}
 
@@ -388,7 +317,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
         <div className="mobile-drawer">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid #1e293b' }}>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 700 }}>
-              {user ? `Logged in: ${profile?.full_name || user.email}` : 'AGRIFlow Mobile Menu'}
+              {user ? `${profile?.full_name || user.email}` : 'AGRIFlow Mobile'}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <Globe size={14} color="#94a3b8" />
@@ -408,52 +337,52 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
 
           {!user && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              <Link to="/farmer/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🏢 Centres Directory</Link>
-              <Link to="/farmer/map" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🗺️ Facilities Map</Link>
+              <Link to="/farmer/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navCentres}</Link>
+              <Link to="/farmer/map" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navMap}</Link>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
-                <Link to="/farmer/login" onClick={() => setMobileMenuOpen(false)} className="btn btn-primary" style={{ textAlign: 'center' }}>Farmer Login</Link>
-                <Link to="/government/login" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary" style={{ textAlign: 'center', background: '#1e293b', color: 'white' }}>Officer Login</Link>
+                <Link to="/farmer/login" onClick={() => setMobileMenuOpen(false)} className="btn btn-primary" style={{ textAlign: 'center' }}>{t.farmerLogin}</Link>
+                <Link to="/government/login" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary" style={{ textAlign: 'center', background: '#1e293b', color: 'white' }}>{t.officerLogin}</Link>
               </div>
             </div>
           )}
 
           {role === 'FARMER' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-              <Link to="/farmer/dashboard" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">📊 Dashboard Overview</Link>
-              <Link to="/farmer/my-farm" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🌾 My Farm & RTC Land</Link>
-              <Link to="/farmer/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🏢 Procurement Centres</Link>
-              <Link to="/farmer/map" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🗺️ Facilities Map</Link>
-              <Link to="/farmer/appointments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">📅 Book Procurement Slot</Link>
-              <Link to="/farmer/queue" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🔔 Live Yard Queue</Link>
-              <Link to="/farmer/procurement" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">⏱️ Live Journey Timeline</Link>
-              <Link to="/farmer/payments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">💳 DBT Payment Tracker</Link>
+              <Link to="/farmer/dashboard" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navDashboard}</Link>
+              <Link to="/farmer/my-farm" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navMyFarm}</Link>
+              <Link to="/farmer/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navCentres}</Link>
+              <Link to="/farmer/map" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navMap}</Link>
+              <Link to="/farmer/appointments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navAppointments}</Link>
+              <Link to="/farmer/queue" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navQueue}</Link>
+              <Link to="/farmer/procurement" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navProcurement}</Link>
+              <Link to="/farmer/payments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navPayments}</Link>
               <Link to="/farmer/notifications" onClick={() => { setUnreadCount(0); setMobileMenuOpen(false); }} className="mobile-nav-link">
-                <Bell size={16} /> Notifications {unreadCount > 0 && `(${unreadCount})`}
+                <Bell size={16} /> {t.navNotifications} {unreadCount > 0 && `(${unreadCount})`}
               </Link>
             </div>
           )}
 
           {role === 'CENTRE_OPERATOR' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-              <Link to="/operator/appointments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🖥️ Operator Console</Link>
-              <Link to="/operator/queue" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🔔 Realtime Queue & Calls</Link>
-              <Link to="/operator/weighment" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">⚖️ Weighbridge Station</Link>
-              <Link to="/operator/quality" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🔬 Quality & Moisture Check</Link>
-              <Link to="/operator/payments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">💳 Payment & DBT Actions</Link>
-              <Link to="/operator/analytics" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#38bdf8' }}>📊 Performance Analytics (Daily/Weekly/Monthly)</Link>
-              <Link to="/operator/statements" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#fbbf24' }}>📑 Payment Statements & Reconciliation</Link>
-              <Link to="/govt/crop-intelligence" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">✨ AI Crop Intelligence</Link>
+              <Link to="/operator/appointments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navConsole}</Link>
+              <Link to="/operator/queue" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navQueue}</Link>
+              <Link to="/operator/weighment" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">⚖️ Weighbridge</Link>
+              <Link to="/operator/quality" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🔬 Quality & Moisture</Link>
+              <Link to="/operator/payments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">💳 Payment & DBT</Link>
+              <Link to="/operator/analytics" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#38bdf8' }}>{t.navAnalytics}</Link>
+              <Link to="/operator/statements" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#fbbf24' }}>{t.navStatements}</Link>
+              <Link to="/govt/crop-intelligence" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navCropAI}</Link>
             </div>
           )}
 
           {(role === 'DISTRICT_OFFICER' || role === 'STATE_ADMIN') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-              <Link to="/admin/overview" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🏛️ District Nodal Overview</Link>
-              <Link to="/operator/analytics" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#38bdf8' }}>📊 Performance Analytics (Daily/Weekly/Monthly)</Link>
-              <Link to="/operator/statements" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#fbbf24' }}>📑 Payment Statements & Reconciliation</Link>
-              <Link to="/farmer/my-farm" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🌾 My Farm</Link>
-              <Link to="/govt/crop-intelligence" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">✨ Crop Forecast & AI</Link>
-              <Link to="/admin/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🏢 Centres Breakdown</Link>
+              <Link to="/admin/overview" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navOverview}</Link>
+              <Link to="/operator/analytics" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#38bdf8' }}>{t.navAnalytics}</Link>
+              <Link to="/operator/statements" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#fbbf24' }}>{t.navStatements}</Link>
+              <Link to="/farmer/my-farm" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navMyFarm}</Link>
+              <Link to="/govt/crop-intelligence" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navCropAI}</Link>
+              <Link to="/admin/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navCentres}</Link>
             </div>
           )}
 
@@ -464,7 +393,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
                 className="btn btn-secondary mobile-full-width"
                 style={{ background: '#334155', color: 'white', border: 'none', justifyContent: 'center' }}
               >
-                <LogOut size={16} /> Sign Out
+                <LogOut size={16} /> {t.signOut}
               </button>
             </div>
           )}
@@ -479,10 +408,10 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
               <LogOut size={32} />
             </div>
             <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem 0' }}>
-              Confirm Sign Out
+              {t.confirmSignOut}
             </h3>
             <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1.5rem' }}>
-              Are you sure you want to end your active session as <strong>{profile?.full_name || user.email}</strong>?
+              {t.confirmSignOutMsg} <strong>{profile?.full_name || user.email}</strong>?
             </p>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button
@@ -490,14 +419,14 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
                 className="btn btn-secondary"
                 style={{ flex: 1 }}
               >
-                Cancel
+                {t.cancel}
               </button>
               <button
                 onClick={handleConfirmSignOut}
                 className="btn btn-danger"
                 style={{ flex: 1 }}
               >
-                Confirm Sign Out
+                {t.signOut}
               </button>
             </div>
           </div>
@@ -508,7 +437,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
 }
 
 function MainAppContent() {
-  const [lang, setLang] = useState('en');
+  const { lang, setLang, t } = useLanguage();
   const [centres, setCentres] = useState([]);
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [toast, setToast] = useState(null);
@@ -548,9 +477,10 @@ function MainAppContent() {
 
   return (
     <div className="app-container">
-      {/* Floating Push Notification Toast */}
+      {/* Floating Push Notification Toast with Mobile Fit */}
       {toast && (
         <div
+          className="floating-toast-container"
           style={{
             position: 'fixed',
             top: '1rem',
@@ -566,7 +496,11 @@ function MainAppContent() {
             display: 'flex',
             alignItems: 'flex-start',
             gap: '0.75rem',
+            cursor: toast.url ? 'pointer' : 'default',
             animation: 'fadeIn 0.25s ease-in'
+          }}
+          onClick={() => {
+            if (toast.url) navigate(toast.url);
           }}
         >
           <div style={{ fontSize: '1.6rem', lineHeight: 1 }}>{toast.icon || '🔔'}</div>
@@ -579,7 +513,10 @@ function MainAppContent() {
             </div>
           </div>
           <button
-            onClick={() => setToast(null)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setToast(null);
+            }}
             style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.25rem', padding: '0 0.2rem', lineHeight: 1 }}
             title="Dismiss"
           >
@@ -589,8 +526,6 @@ function MainAppContent() {
       )}
 
       <NavigationBar
-        lang={lang}
-        setLang={setLang}
         onOpenDemoModal={() => setShowDemoModal(true)}
       />
 
@@ -918,9 +853,11 @@ function MainAppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <MainAppContent />
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <MainAppContent />
+        </AuthProvider>
+      </LanguageProvider>
     </BrowserRouter>
   );
 }
