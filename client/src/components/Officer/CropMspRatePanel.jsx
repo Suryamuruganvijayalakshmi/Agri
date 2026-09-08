@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 export default function CropMspRatePanel({ compact = false }) {
   const { profile } = useAuth();
   const [products, setProducts] = useState([]);
+  const [selectedProductId, setSelectedProductId] = useState('');
   const [editingPrice, setEditingPrice] = useState({});
   const [savingPrice, setSavingPrice] = useState({});
   const [message, setMessage] = useState('');
@@ -14,15 +15,26 @@ export default function CropMspRatePanel({ compact = false }) {
   const [newCrop, setNewCrop] = useState({ name: '', category: 'Grain', msp_price_per_kg: '' });
   const [addingCrop, setAddingCrop] = useState(false);
 
-  const loadProducts = async () => {
+  const loadProducts = async (preferredProductId = '') => {
     const result = await fetchProducts();
-    if (result.success) setProducts(result.products || []);
+    if (result.success) {
+      const nextProducts = result.products || [];
+      setProducts(nextProducts);
+      setSelectedProductId((current) => {
+        if (preferredProductId && nextProducts.some((product) => product.id === preferredProductId)) return preferredProductId;
+        if (current && nextProducts.some((product) => product.id === current)) return current;
+        return nextProducts[0]?.id || '';
+      });
+    }
   };
 
   useEffect(() => {
     loadProducts();
     const handlePriceUpdate = (payload) => {
-      if (payload?.products) setProducts(payload.products);
+      if (payload?.products) {
+        setProducts(payload.products);
+        setSelectedProductId((current) => current || payload.products[0]?.id || '');
+      }
       else loadProducts();
     };
     socket.on('crop_prices_updated', handlePriceUpdate);
@@ -77,7 +89,7 @@ export default function CropMspRatePanel({ compact = false }) {
         package_weight_kg: 50
       });
       if (!result.success) throw new Error(result.error || 'Crop could not be added.');
-      await loadProducts();
+      await loadProducts(result.product?.id || '');
       setNewCrop({ name: '', category: 'Grain', msp_price_per_kg: '' });
       setShowAddCrop(false);
       setMessage(`${name} added at Rs ${rate}/kg. You can now change its rate below.`);
@@ -136,8 +148,21 @@ export default function CropMspRatePanel({ compact = false }) {
         </form>
       )}
 
+      <label style={{ display: 'grid', gap: '0.35rem', maxWidth: '420px', marginBottom: '1rem', color: '#475569', fontSize: '0.78rem', fontWeight: 800 }}>
+        Choose crop to change rate
+        <select
+          value={selectedProductId}
+          onChange={(event) => setSelectedProductId(event.target.value)}
+          disabled={products.length === 0}
+          style={{ padding: '0.65rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', background: '#fff', color: '#0f172a', fontSize: '0.9rem' }}
+        >
+          {products.length === 0 && <option value="">No crops available</option>}
+          {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+        </select>
+      </label>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.8rem' }}>
-        {products.map((product) => (
+        {products.filter((product) => product.id === selectedProductId).map((product) => (
           <div key={product.id} style={{ padding: '0.9rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc' }}>
             <div style={{ fontWeight: 800, color: '#0f172a', marginBottom: '0.35rem' }}>{product.name}</div>
             <div style={{ color: '#15803d', fontSize: '1rem', fontWeight: 900 }}>Rs {Number(product.msp_price_per_kg).toFixed(2)}/kg</div>
