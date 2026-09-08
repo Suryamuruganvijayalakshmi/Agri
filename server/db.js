@@ -271,8 +271,8 @@ class AgriFlowMongoDatabase {
     });
 
     // Create notifications
-    await this.createNotification(farmer_id, centre_id, 'BOOKING_CONFIRMED', '✅ Slot Booked!',
-      `Your slot at ${centre.name} is confirmed. Token: ${tokenNumber}. Slot: ${time_slot || '09:00 AM'}. You are now in the queue.`, '🎫');
+    await this.createNotification(farmer_id, centre_id, 'SLOT_BOOKED', 'Slot Booked',
+      `Token ${tokenNumber} confirmed for ${Number(quantity_kg || 0).toLocaleString()} kg ${crop_type || 'produce'}.`, '📅', '/farmer/queue');
 
     // SMS notification (simulation mode by default)
     if (farmer_phone) {
@@ -416,9 +416,9 @@ class AgriFlowMongoDatabase {
       // Notify completed farmer
       await this.createNotification(
         currentProcessing.farmer_id, centreId,
-        'PROCUREMENT_COMPLETED', '✅ Procurement Completed!',
-        `Your procurement at ${centre.name} is complete. Token: ${currentProcessing.token_number}. Check payment status.`,
-        '✅'
+        'PAYMENT_COMPLETED', 'Payment Processed',
+        `Your procurement payment has been processed.`,
+        '💰', '/farmer/payments'
       );
 
       // Update centre procured count
@@ -469,9 +469,9 @@ class AgriFlowMongoDatabase {
     // Notify the called farmer
     await this.createNotification(
       nextFarmer.farmer_id, centreId,
-      'TOKEN_CALLED', `🔔 Token ${nextFarmer.token_number} Called!`,
-      `Your token has been called at ${centre.name}. Please proceed to the counter immediately.`,
-      '🔔'
+      'TOKEN_CALLED', 'Token Called',
+      `Token ${nextFarmer.token_number} called. Proceed to Weighbridge Counter #${(await Appointment.countDocuments({ centre_id: centreId, status: { $in: ['CALLED', 'PROCESSING'] } })) || 1}.`,
+      '📢', '/farmer/queue'
     );
 
     // SMS to called farmer
@@ -525,7 +525,7 @@ class AgriFlowMongoDatabase {
     await Procurement.updateOne({ appointment_id: appt.id }, { $set: { status: 'PROCESSING' } });
 
     await this.createNotification(appt.farmer_id, centreId, 'PROCESSING_STARTED', '🔄 Processing Started',
-      `Your procurement process has started at the counter. Token: ${appt.token_number}`, '🔄');
+      `Your procurement process has started at the counter. Token: ${appt.token_number}`, '🔄', '/farmer/procurement');
 
     return { success: true, message: `Processing started for ${appt.token_number}`, appointment: appt.toObject() };
   }
@@ -571,8 +571,8 @@ class AgriFlowMongoDatabase {
       $set: { amount: actualWeightKg * 22, quantity_kg: actualWeightKg }
     });
 
-    await this.createNotification(appt.farmer_id, centreId, 'WEIGHMENT_DONE', '⚖️ Weighment Complete',
-      `Your produce has been weighed: ${actualWeightKg} kg. Token: ${appt.token_number}. Quality check next.`, '⚖️');
+    await this.createNotification(appt.farmer_id, centreId, 'WEIGHMENT_COMPLETED', 'Weighment Completed',
+      `Weight certificate recorded: ${Number(actualWeightKg).toLocaleString()} kg net produce.`, '⚖️', '/farmer/procurement');
 
     return {
       success: true,
@@ -613,8 +613,8 @@ class AgriFlowMongoDatabase {
       inspector_name: 'Quality Inspector'
     });
 
-    await this.createNotification(appt.farmer_id, centreId, 'QUALITY_DONE', '🔬 Quality Check Complete',
-      `Quality: ${grade || 'Grade A'}. Moisture: ${moisture || '13%'}. Token: ${appt.token_number}. Procurement completing.`, '🔬');
+    await this.createNotification(appt.farmer_id, centreId, 'QUALITY_COMPLETED', 'Quality Verification Completed',
+      `Quality verification completed for Token ${appt.token_number}.`, '🔬', '/farmer/procurement');
 
     return { success: true, message: `Quality recorded for ${appt.token_number}: ${grade}`, appointment: appt.toObject() };
   }
@@ -658,8 +658,8 @@ class AgriFlowMongoDatabase {
       next_action: 'Payment approval and DBT transfer'
     });
 
-    await this.createNotification(appt.farmer_id, centreId, 'PROCUREMENT_COMPLETED', '✅ Procurement Completed!',
-      `Your procurement is complete! ${appt.actual_weight_kg || appt.declared_quantity_kg} kg accepted. Token: ${appt.token_number}. Payment is being processed.`, '✅');
+    await this.createNotification(appt.farmer_id, centreId, 'PAYMENT_COMPLETED', 'Payment Processed',
+      `Your procurement payment has been processed.`, '💰', '/farmer/payments');
 
     if (appt.farmer_phone) {
       sendSMS(appt.farmer_phone, `AGRIFlow: Procurement COMPLETE! ${appt.actual_weight_kg || appt.declared_quantity_kg} kg accepted. Token: ${appt.token_number}. Payment processing.`)
@@ -703,9 +703,11 @@ class AgriFlowMongoDatabase {
     }
     await payment.save();
 
-    await this.createNotification(payment.farmer_id, payment.centre_id, 'PAYMENT_UPDATE',
-      `💰 Payment ${newStatus}`,
-      `Your payment of ₹${payment.amount?.toLocaleString()} is now ${newStatus}. ${payment.reason}`, '💰');
+    await this.createNotification(payment.farmer_id, payment.centre_id,
+      newStatus === 'PAID' ? 'PAYMENT_COMPLETED' : 'PAYMENT_UPDATE',
+      newStatus === 'PAID' ? 'Payment Processed' : `Payment ${newStatus}`,
+      newStatus === 'PAID' ? `Your procurement payment has been processed.` : `Your payment of ₹${payment.amount?.toLocaleString()} is now ${newStatus}. ${payment.reason}`,
+      '💰', '/farmer/payments');
 
     if (newStatus === 'PAID') {
       // Get farmer phone for SMS
@@ -1110,7 +1112,7 @@ class AgriFlowMongoDatabase {
     this.notificationEmitter = fn;
   }
 
-  async createNotification(farmerId, centreId, type, title, message, icon = '🔔') {
+  async createNotification(farmerId, centreId, type, title, message, icon = '🔔', link = null) {
     try {
       const notif = await Notification.create({
         id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
@@ -1120,6 +1122,7 @@ class AgriFlowMongoDatabase {
         title,
         message,
         icon: icon || '🔔',
+        link: link || null,
         read: false
       });
       if (this.notificationEmitter) {
@@ -1662,10 +1665,11 @@ class AgriFlowMongoDatabase {
     await this.createNotification(
       farmer_id || 'unknown',
       effectiveCentreId,
-      'BOOKING_CONFIRMED',
-      '✅ Slot Booked!',
-      `Token: ${tokenNumber}. ${baysLabel}. Slot: ${slot.start_time}. You are in the queue at ${centre?.name || 'Centre'}.`,
-      '🎫'
+      'SLOT_BOOKED',
+      'Slot Booked',
+      `Token ${tokenNumber} confirmed for ${Number(finalQty).toLocaleString()} kg ${finalCrop}.`,
+      '📅',
+      '/farmer/queue'
     );
 
     if (farmer_phone) {

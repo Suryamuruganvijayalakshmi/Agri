@@ -1026,12 +1026,20 @@ app.get('/api/notifications/:farmerId/unread-count', async (req, res) => {
 });
 
 app.post('/api/notifications/read/:notifId', async (req, res) => {
-  try { await Notification.updateOne({ id: req.params.notifId }, { $set: { read: true } }); res.json({ success: true }); } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+  try {
+    const notif = await Notification.findOne({ id: req.params.notifId });
+    if (notif) {
+      await Notification.updateOne({ id: req.params.notifId }, { $set: { read: true } });
+      io.emit('notifications_updated', { farmer_id: notif.farmer_id });
+    }
+    res.json({ success: true });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 app.post('/api/notifications/read-all/:farmerId', async (req, res) => {
   try {
     await Notification.updateMany({ $or: [{ farmer_id: req.params.farmerId }, { farmer_id: 'ALL' }] }, { $set: { read: true } });
+    io.emit('notifications_updated', { farmer_id: req.params.farmerId });
     res.json({ success: true });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });

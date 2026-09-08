@@ -124,19 +124,7 @@ export async function sendBookingConfirmationEmail(appointment, farmerDetails = 
       html: htmlContent
     });
 
-    // Also persist in-app Notification document in MongoDB
-    try {
-      await Notification.create({
-        id: `NOTIF-${uuidv4().substring(0, 8)}`,
-        farmer_id: farmerId,
-        type: 'SLOT_BOOKED',
-        title: `Procurement Slot Confirmed: Token #${appointment.token_number}`,
-        message: `Slot booked at ${appointment.centre_name || 'Yard'} for ${appointment.crop_type} (${appointment.declared_quantity_kg}kg). QR Code sent to registered email ${recipientEmail}.`,
-        read: false
-      });
-    } catch (notifErr) {
-      console.warn('Notification DB save warning:', notifErr.message);
-    }
+    // Note: In-app SLOT_BOOKED notification is now created by db.js createNotification
 
     console.log(`✅ [EMAIL SERVICE] Booking confirmation with QR payload sent to registered email/phone: ${recipientEmail}`);
     return { success: true, recipientEmail };

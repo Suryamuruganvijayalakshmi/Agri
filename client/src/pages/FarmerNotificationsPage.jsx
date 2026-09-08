@@ -8,13 +8,22 @@ import {
 } from 'lucide-react';
 
 const TYPE_CONFIG = {
-  CENTRE_UPDATE:      { icon: '🏢', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'Centre Update' },
-  BOOKING_CONFIRMED:  { icon: '✅', color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Booking Confirmed' },
-  PAYMENT_CREDITED:   { icon: '💰', color: '#9333ea', bg: '#faf5ff', border: '#d8b4fe', label: 'Payment' },
-  QUALITY_ACCEPTED:   { icon: '🔬', color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', label: 'Quality Check' },
-  REMINDER:           { icon: '⏰', color: '#d97706', bg: '#fffbeb', border: '#fcd34d', label: 'Reminder' },
-  QUEUE_UPDATE:       { icon: '📋', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', label: 'Queue' },
-  DEFAULT:            { icon: '🔔', color: '#475569', bg: '#f8fafc', border: '#cbd5e1', label: 'Notification' }
+  SLOT_BOOKED:          { icon: '📅', color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Slot Booked' },
+  TOKEN_CALLED:         { icon: '📢', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', label: 'Token Called' },
+  WEIGHMENT_COMPLETED:  { icon: '⚖️', color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', label: 'Weighment Completed' },
+  QUALITY_COMPLETED:    { icon: '🔬', color: '#7c3aed', bg: '#faf5ff', border: '#d8b4fe', label: 'Quality Verified' },
+  PAYMENT_COMPLETED:    { icon: '💰', color: '#d97706', bg: '#fffbeb', border: '#fcd34d', label: 'Payment Processed' },
+  PAYMENT_UPDATE:       { icon: '💳', color: '#9333ea', bg: '#faf5ff', border: '#d8b4fe', label: 'Payment Update' },
+  PROCESSING_STARTED:   { icon: '🔄', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'Processing' },
+  APPROACHING:          { icon: '⏰', color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', label: 'Approaching' },
+  CENTRE_UPDATE:        { icon: '🏢', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'Centre Update' },
+  BOOKING_CONFIRMED:    { icon: '✅', color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Booking Confirmed' },
+  PROCUREMENT_COMPLETED:{ icon: '✅', color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Procurement Complete' },
+  PAYMENT_CREDITED:     { icon: '💰', color: '#9333ea', bg: '#faf5ff', border: '#d8b4fe', label: 'Payment' },
+  QUALITY_ACCEPTED:     { icon: '🔬', color: '#0891b2', bg: '#ecfeff', border: '#a5f3fc', label: 'Quality Check' },
+  REMINDER:             { icon: '⏰', color: '#d97706', bg: '#fffbeb', border: '#fcd34d', label: 'Reminder' },
+  QUEUE_UPDATE:         { icon: '📋', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', label: 'Queue' },
+  DEFAULT:              { icon: '🔔', color: '#475569', bg: '#f8fafc', border: '#cbd5e1', label: 'Notification' }
 };
 
 const API = '/api';
@@ -50,8 +59,10 @@ export default function FarmerNotificationsPage() {
   useEffect(() => {
     loadNotifications();
 
-    // ── Socket: live centre_notification pushed by officer save ──────────
+    // ── Socket: live notification_pushed from the pipeline ──────────
     const handleLiveNotif = (notif) => {
+      // Only care about notifications for this farmer or ALL
+      if (notif.farmer_id && notif.farmer_id !== farmerId && notif.farmer_id !== 'ALL') return;
       setNotifications(prev => {
         const exists = prev.find(n => n.id === notif.id);
         if (exists) return prev;
@@ -62,11 +73,21 @@ export default function FarmerNotificationsPage() {
       setTimeout(() => setLiveToast(null), 5000);
     };
 
+    const handleUpdated = (data) => {
+      if (data?.farmer_id === farmerId || data?.farmer_id === 'ALL') {
+        loadNotifications();
+      }
+    };
+
+    socket.on('notification_pushed', handleLiveNotif);
     socket.on('centre_notification', handleLiveNotif);
+    socket.on('notifications_updated', handleUpdated);
     socket.on('appointment_booked', () => loadNotifications());
 
     return () => {
+      socket.off('notification_pushed', handleLiveNotif);
       socket.off('centre_notification', handleLiveNotif);
+      socket.off('notifications_updated', handleUpdated);
       socket.off('appointment_booked');
     };
   }, [farmerId, loadNotifications]);

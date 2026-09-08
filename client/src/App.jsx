@@ -42,6 +42,7 @@ import {
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import { Sprout, LogOut, User, MapPin, Calendar, Clock, CreditCard, ShieldCheck, Zap, Globe, Activity, Bell, RefreshCw, Menu, X, BarChart3, FileSpreadsheet, FileText } from 'lucide-react';
+import NotificationBellDropdown from './components/NotificationBellDropdown';
 
 function NavigationBar({ onOpenDemoModal }) {
   const { user, profile, role, signOut } = useAuth();
@@ -73,12 +74,20 @@ function NavigationBar({ onOpenDemoModal }) {
     };
     fetchCount();
 
-    const handleNewNotif = () => setUnreadCount(c => c + 1);
+    const handleNewNotif = (notif) => {
+      if (notif.farmer_id && notif.farmer_id !== farmerId && notif.farmer_id !== 'ALL') return;
+      setUnreadCount(c => c + 1);
+    };
+    const handleUpdated = (data) => {
+      if (data?.farmer_id === farmerId || data?.farmer_id === 'ALL') fetchCount();
+    };
+    socket.on('notification_pushed', handleNewNotif);
     socket.on('centre_notification', handleNewNotif);
-    socket.on('appointment_booked', handleNewNotif);
+    socket.on('notifications_updated', handleUpdated);
     return () => {
+      socket.off('notification_pushed', handleNewNotif);
       socket.off('centre_notification', handleNewNotif);
-      socket.off('appointment_booked', handleNewNotif);
+      socket.off('notifications_updated', handleUpdated);
     };
   }, [role, user]);
 
@@ -192,23 +201,6 @@ function NavigationBar({ onOpenDemoModal }) {
               <Link to="/farmer/queue" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navQueue}</Link>
               <Link to="/farmer/procurement" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navProcurement}</Link>
               <Link to="/farmer/payments" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navPayments}</Link>
-
-              <Link to="/farmer/notifications"
-                onClick={() => setUnreadCount(0)}
-                style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600, position: 'relative', display: 'inline-flex', alignItems: 'center' }}
-                title={t.navNotifications}
-              >
-                <Bell size={17} />
-                {unreadCount > 0 && (
-                  <span style={{
-                    position: 'absolute', top: '-4px', right: '0px',
-                    background: '#dc2626', color: 'white',
-                    fontSize: '0.6rem', fontWeight: 900, borderRadius: '9999px',
-                    minWidth: '16px', height: '16px', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center', padding: '0 3px'
-                  }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
-                )}
-              </Link>
             </div>
           )}
 
@@ -265,6 +257,9 @@ function NavigationBar({ onOpenDemoModal }) {
               <Link to="/admin/centres" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navCentres}</Link>
             </div>
           )}
+
+          {/* Notification Bell Dropdown (Farmer only) */}
+          <NotificationBellDropdown />
 
           {/* Language Selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
