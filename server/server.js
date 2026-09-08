@@ -12,6 +12,7 @@ import { Farmer } from './models/Farmer.js';
 import { Notification } from './models/Notification.js';
 import { sendBookingConfirmationEmail, sendAgentBookingNotification } from './services/emailService.js';
 import { getSimulatedSMSLog, getSMSProviderInfo } from './services/smsService.js';
+import { getVapidPublicKey, isVapidReady, savePushSubscription, broadcastPushNotification, sendPushToUser } from './services/webPushService.js';
 
 dotenv.config();
 
@@ -78,7 +79,7 @@ io.on('connection', async (socket) => {
   });
 });
 
-// Helper for broadcasting realtime updates to all clients
+// Helper for broadcasting realtime updates to all clients (Socket.IO + Real Native Server Push like Instagram)
 const broadcastRealtimeUpdate = async (eventType, payload) => {
   io.emit(eventType, payload);
   try {
@@ -87,11 +88,122 @@ const broadcastRealtimeUpdate = async (eventType, payload) => {
   } catch (err) {
     console.error('Error broadcasting:', err);
   }
+
+  // Real Native Server Web Push (works when site/browser is closed & phone is locked)
+  try {
+    if (eventType === 'notification_pushed') {
+      await broadcastPushNotification(
+        payload?.title || 'AGRIFlow Procurement Alert',
+        payload?.message || 'New operational update received.',
+        { url: payload?.url || '/farmer/dashboard' }
+      );
+    } else if (eventType === 'appointment_booked') {
+      const appt = payload?.appointment || payload;
+      const token = payload?.token_number || appt?.token_number || 'New Slot';
+      const farmer = appt?.farmer_name || 'Farmer';
+      const qty = appt?.declared_quantity_kg || appt?.quantity_kg || 2500;
+      await broadcastPushNotification(
+        `📅 Slot Booked: Token ${token}`,
+        `${farmer} booked ${Number(qty).toLocaleString()} kg of ${appt?.crop_type || 'produce'}.`,
+        { url: '/operator/queue' }
+      );
+    } else if (eventType === 'queue_updated') {
+      if (payload?.status === 'CALLED' || payload?.token_number) {
+        await broadcastPushNotification(
+          `📢 Token ${payload.token_number || 'Next'} Called!`,
+          `Proceed to counter / weighbridge immediately.`,
+          { url: '/farmer/queue' }
+        );
+      }
+    } else if (eventType === 'payment_updated') {
+      const p = payload?.payment || payload;
+      await broadcastPushNotification(
+        `💳 DBT Payment: ${p?.status || 'UPDATED'}`,
+        `Payment of ₹${Number(p?.amount || 0).toLocaleString()} for ${p?.farmer_name || 'Farmer'} is ${p?.status}.`,
+        { url: '/farmer/payments' }
+      );
+    }
+  } catch (e) {
+    console.warn('[Web Push Broadcast] Warning:', e.message);
+  }
 };
 
 // Connect DB notification triggers to real-time Web Push broadcast
 db.setNotificationEmitter((notif) => {
   broadcastRealtimeUpdate('notification_pushed', notif);
+});
+
+// ============================================================
+// REAL WEB PUSH (INSTAGRAM-STYLE LOCKSCREEN NOTIFICATIONS)
+// ============================================================
+
+// GET VAPID Public Key for client browser subscription
+app.get('/api/notifications/vapid-public-key', (req, res) => {
+  res.json({ success: true, publicKey: getVapidPublicKey() });
+});
+
+// POST Save Client Push Subscription
+app.post('/api/notifications/subscribe', async (req, res) => {
+  try {
+    const { subscription, userId, role } = req.body;
+    if (!subscription || !subscription.endpoint) {
+      return res.status(400).json({ success: false, error: 'Subscription data required' });
+    }
+    await savePushSubscription(subscription, userId, role);
+    console.log('[Web Push] Mobile/Browser registered for real lockscreen push.');
+    res.json({ success: true, message: 'Device successfully subscribed for background push alerts.' });
+  } catch (err) {
+    console.error('Push subscription error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST Trigger real server push notification (works with closed app/phone screen off!)
+app.post('/api/notifications/test-push', async (req, res) => {
+  try {
+    const {
+      delayMs = 0,
+      title = '🌾 AGRIFlow Lockscreen Alert: Token #104 Called!',
+      message = 'Your token has arrived at Weighbridge Station #1. Proceed to weighbridge immediately.',
+      url = '/farmer/queue'
+    } = req.body;
+
+    if (delayMs > 0) {
+      setTimeout(async () => {
+        await broadcastPushNotification(title, message, { url });
+      }, Number(delayMs));
+      res.json({
+        success: true,
+        message: `Real Server Push scheduled in ${delayMs / 1000}s! Lock your phone and close the browser right now to see it on the lockscreen.`
+      });
+    } else {
+      const result = await broadcastPushNotification(title, message, { url });
+      res.json({ success: true, message: 'Push notification sent to all registered devices.', result });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET Debug: check VAPID status and how many devices are subscribed
+app.get('/api/notifications/status', async (req, res) => {
+  try {
+    const { PushSubscription } = await import('./models/PushSubscription.js');
+    const count = await PushSubscription.countDocuments({});
+    const subs = await PushSubscription.find({}, 'userId role createdAt updatedAt').lean();
+    res.json({
+      success: true,
+      vapidConfigured: isVapidReady(),
+      registeredDevices: count,
+      devices: subs.map(s => ({
+        userId: s.userId,
+        role: s.role,
+        registeredAt: s.updatedAt || s.createdAt
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ============================================================

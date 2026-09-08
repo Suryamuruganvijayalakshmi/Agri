@@ -1,6 +1,23 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { subscribeToRealWebPush } from '../services/notificationManager';
 
 const AuthContext = createContext({});
+
+// Save user session and critical push notification keys to localStorage
+function persistSession(u, token) {
+  localStorage.setItem('agriflow_token', token);
+  localStorage.setItem('agriflow_user', JSON.stringify(u));
+  // These are read by notificationManager to tag push subscriptions with the correct user
+  localStorage.setItem('agriflow_user_id', u.id || u._id || u.email || 'anonymous');
+  localStorage.setItem('agriflow_role', u.role || 'FARMER');
+}
+
+function clearSession() {
+  localStorage.removeItem('agriflow_token');
+  localStorage.removeItem('agriflow_user');
+  localStorage.removeItem('agriflow_user_id');
+  localStorage.removeItem('agriflow_role');
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -8,7 +25,7 @@ export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check persisted auth state on mount
+  // Restore persisted auth on page load
   useEffect(() => {
     const savedUserStr = localStorage.getItem('agriflow_user');
     if (savedUserStr) {
@@ -23,6 +40,16 @@ export const AuthProvider = ({ children }) => {
     }
     setLoading(false);
   }, []);
+
+  // After login/signup, re-register push subscription with the real userId
+  // so the server can target this specific user for notifications
+  async function afterAuthSuccess(u) {
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        await subscribeToRealWebPush();
+      }
+    } catch {}
+  }
 
   // MongoDB Sign In
   const signIn = async (email, password) => {
@@ -40,9 +67,9 @@ export const AuthProvider = ({ children }) => {
         setUser(u);
         setProfile(u);
         setRole(u.role || 'FARMER');
-        localStorage.setItem('agriflow_token', resData.token);
-        localStorage.setItem('agriflow_user', JSON.stringify(u));
+        persistSession(u, resData.token);
         setLoading(false);
+        afterAuthSuccess(u); // re-subscribe push with real userId
         return { success: true, user: u, role: u.role };
       }
 
@@ -70,9 +97,9 @@ export const AuthProvider = ({ children }) => {
         setUser(u);
         setProfile(u);
         setRole('FARMER');
-        localStorage.setItem('agriflow_token', resData.token);
-        localStorage.setItem('agriflow_user', JSON.stringify(u));
+        persistSession(u, resData.token);
         setLoading(false);
+        afterAuthSuccess(u);
         return { success: true, user: u };
       }
 
@@ -100,9 +127,9 @@ export const AuthProvider = ({ children }) => {
         setUser(u);
         setProfile(u);
         setRole(u.role);
-        localStorage.setItem('agriflow_token', resData.token);
-        localStorage.setItem('agriflow_user', JSON.stringify(u));
+        persistSession(u, resData.token);
         setLoading(false);
+        afterAuthSuccess(u);
         return { success: true, user: u };
       }
 
@@ -119,8 +146,7 @@ export const AuthProvider = ({ children }) => {
   // Sign Out
   const signOut = async () => {
     setLoading(true);
-    localStorage.removeItem('agriflow_token');
-    localStorage.removeItem('agriflow_user');
+    clearSession();
     setUser(null);
     setProfile(null);
     setRole(null);
