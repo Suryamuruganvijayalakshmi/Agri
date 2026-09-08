@@ -19,7 +19,7 @@ export default function MyFarmPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isOfficerOrAdmin = user?.role === 'CENTRE_OPERATOR' || user?.role === 'QUALITY_INSPECTOR' || user?.role === 'ADMIN';
-  const farmerId = (user && user.role === 'FARMER' && user.id) ? user.id : 'default-farmer';
+  const farmerId = (user && user.role === 'FARMER' && user.id) ? user.id : null;
 
   const [parcels, setParcels] = useState([]);
   const [selectedParcel, setSelectedParcel] = useState(null);
@@ -60,24 +60,13 @@ export default function MyFarmPage() {
         setParcels(landRes.parcels);
         setSelectedParcel(landRes.parcels[0]);
         setCultivatedAcres(landRes.parcels[0].cultivable_area_acres || 2.5);
-      } else {
-        // Fallback to sample regional parcels so the GIS map and crops are always populated!
-        const fallbackLand = await fetchLandParcels('default-farmer');
-        if (fallbackLand.success && fallbackLand.parcels && fallbackLand.parcels.length > 0) {
-          setParcels(fallbackLand.parcels);
-          setSelectedParcel(fallbackLand.parcels[0]);
-          setCultivatedAcres(fallbackLand.parcels[0].cultivable_area_acres || 2.5);
-        }
       }
+      // No fallback to 'default-farmer' — new accounts start with a clean empty farm
 
       if (cropRes.success && cropRes.crops && cropRes.crops.length > 0) {
         setCrops(cropRes.crops);
-      } else {
-        const fallbackCrops = await fetchFarmerCrops('default-farmer');
-        if (fallbackCrops.success && fallbackCrops.crops) {
-          setCrops(fallbackCrops.crops);
-        }
       }
+      // No fallback to 'default-farmer' crops either
     } catch (err) {
       console.error('Error loading farm data:', err);
     } finally {

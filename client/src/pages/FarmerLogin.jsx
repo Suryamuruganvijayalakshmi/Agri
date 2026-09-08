@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, Lock, Sprout, AlertCircle } from 'lucide-react';
+import { initNotificationService, requestNotificationPermission } from '../services/notificationManager';
 
 export default function FarmerLogin() {
   const navigate = useNavigate();
@@ -11,6 +12,17 @@ export default function FarmerLogin() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+
+  // Ask for notification permission as soon as the login page loads
+  // This is the optimal time — triggered by user navigating to login, satisfying browser gesture requirement
+  useEffect(() => {
+    initNotificationService().catch(() => {});
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      // Small delay so UI loads first
+      const t = setTimeout(() => requestNotificationPermission().catch(() => {}), 1500);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -22,10 +34,11 @@ export default function FarmerLogin() {
       setErrorMsg(res.error || 'Authentication failed. Please check your credentials.');
       setLoading(false);
     } else {
-      // Prompt user for push notification permission on login click gesture
+      // Re-init notification service after login so correct userId is stored for push targeting
       try {
+        await initNotificationService();
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-          await Notification.requestPermission();
+          await requestNotificationPermission();
         }
       } catch (err) {}
       navigate('/farmer/dashboard');

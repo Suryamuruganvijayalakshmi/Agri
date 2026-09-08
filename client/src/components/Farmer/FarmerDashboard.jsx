@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -6,9 +6,21 @@ import {
   CheckCircle2, CreditCard, ArrowRight, Warehouse, AlertCircle,
   FileText, Droplets, Calendar, Sparkles
 } from 'lucide-react';
-import { fetchFarmerDashboard } from '../../services/api';
+import { fetchFarmerDashboard, fetchProducts } from '../../services/api';
 import useRealtimePolling from '../../hooks/useRealtimePolling';
 import { useLanguage } from '../../context/LanguageContext';
+
+// Live local clock hook — syncs to PC/Mobile system clock
+function useLocalClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const dateLabel = now.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  const timeLabel = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  return { dateLabel, timeLabel };
+}
 
 export default function FarmerDashboard({ centres = [] }) {
   const { user, profile } = useAuth();
@@ -18,6 +30,8 @@ export default function FarmerDashboard({ centres = [] }) {
   const activeFarmerId = user?.id || 'default-farmer';
   const farmerName = profile?.full_name || user?.full_name || 'Farmer';
   const farmerPhone = profile?.phone || user?.phone || '';
+  const { dateLabel, timeLabel } = useLocalClock();
+  const [mspRate, setMspRate] = useState(22);
 
   // Real-time polling hook for farmer dashboard data (3s interval + socket events)
   const { data: dashData, loading, refresh, realtimePulse } = useRealtimePolling(
@@ -34,6 +48,14 @@ export default function FarmerDashboard({ centres = [] }) {
   const lastCompleted = dashData?.last_completed || null;
   const lastPayment = dashData?.last_payment || null;
   const history = dashData?.history || [];
+
+  useEffect(() => {
+    fetchProducts().then((result) => {
+      const cropName = String(activeBooking?.crop_type || activeBooking?.crop || '').toLowerCase();
+      const product = (result.products || []).find((item) => cropName && cropName.includes(String(item.name).toLowerCase().split(' ')[0]));
+      if (product) setMspRate(Number(product.msp_price_per_kg) || 22);
+    }).catch(() => {});
+  }, [activeBooking?.crop_type, activeBooking?.crop]);
 
   // Stage progress mapping with live multilingual support
   const stages = [
@@ -66,6 +88,10 @@ export default function FarmerDashboard({ centres = [] }) {
               Farmer ID: <strong style={{ color: '#e2e8f0' }}>{activeFarmerId}</strong>
               {farmerPhone && ` • Mobile: ${farmerPhone}`}
               {user?.district && ` • District: ${user.district}`}
+            </p>
+            {/* Live PC/Mobile system date & time */}
+            <p style={{ fontSize: '0.78rem', color: '#4ade80', margin: '0.3rem 0 0 0', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Clock size={13} /> {dateLabel} &nbsp;|&nbsp; {timeLabel}
             </p>
           </div>
 
@@ -179,7 +205,7 @@ export default function FarmerDashboard({ centres = [] }) {
             {t.paymentStatus}
           </div>
           <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#15803d', margin: '0.3rem 0' }}>
-            ₹{Number(activePayment?.amount || lastPayment?.amount || ((activeBooking?.declared_quantity_kg || 2500) * 22)).toLocaleString()}
+            ₹{Number(activePayment?.amount || lastPayment?.amount || (activeBooking?.declared_quantity_kg ? activeBooking.declared_quantity_kg * mspRate : 0)).toLocaleString()}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 700 }}>
             <span style={{
@@ -189,7 +215,7 @@ export default function FarmerDashboard({ centres = [] }) {
             }}>
               {activePayment?.status || lastPayment?.status || 'PENDING'}
             </span>
-            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>MSP ₹2,200/Q</span>
+            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>MSP ₹{(mspRate * 100).toLocaleString()}/Q</span>
           </div>
           <Link to="/farmer/payments" style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.8rem', color: '#059669', fontWeight: 700 }}>
             View Payment Voucher →

@@ -10,6 +10,7 @@ export default function FarmerBookingPositionGrid({
   farmerName = 'Ramesh Gowda',
   crop = 'Paddy (Sona Masoori)',
   quantityKg = 2500,
+  appointmentDate,
   onBookingSuccess
 }) {
   const [positions, setPositions] = useState([]);
@@ -149,7 +150,8 @@ export default function FarmerBookingPositionGrid({
         position_numbers: selectedPositions.map(p => p.position_number),
         position_number: selectedPositions[0]?.position_number,
         crop_type: crop,
-        declared_quantity_kg: Number(quantityKg)
+        declared_quantity_kg: Number(quantityKg),
+        appointment_date: appointmentDate
       });
 
       if (!res.success) {

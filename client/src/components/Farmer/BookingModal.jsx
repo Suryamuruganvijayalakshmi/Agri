@@ -5,7 +5,10 @@ import FarmerBookingPositionGrid from './FarmerBookingPositionGrid';
 export default function BookingModal({ centre, farmerId = 'F-1042', farmerName = 'Ramesh Gowda', onClose, onBookingSuccess }) {
   const [crop, setCrop] = useState('Paddy (Sona Masoori)');
   const [quantity, setQuantity] = useState(2500);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
 
   const selectedSlot = {
     id: `slot-${centre?.id || 'centre-1'}-1000`,
@@ -82,6 +85,7 @@ export default function BookingModal({ centre, farmerId = 'F-1042', farmerName =
           farmerName={farmerName}
           crop={crop}
           quantityKg={quantity}
+          appointmentDate={date}
           onBookingSuccess={(appt) => {
             if (onBookingSuccess) onBookingSuccess(appt);
             setTimeout(() => onClose(), 2500);

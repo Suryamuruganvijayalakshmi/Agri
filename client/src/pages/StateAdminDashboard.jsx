@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Building, Activity, ShieldCheck, CheckCircle2, XCircle, FileText, RefreshCw, BarChart2, Zap, Sprout, AlertTriangle, Layers } from 'lucide-react';
 import { fetchAdminMetrics, fetchProducts, approveProductAPI, rejectProductAPI, fetchAuditLogs } from '../services/api';
 import ProcurementMap from '../components/Map/ProcurementMap';
+import CropMspRatePanel from '../components/Officer/CropMspRatePanel';
 
 export default function StateAdminDashboard({ centres = [] }) {
   const [metrics, setMetrics] = useState(null);
@@ -107,6 +108,8 @@ export default function StateAdminDashboard({ centres = [] }) {
           <CheckCircle2 size={18} style={{ verticalAlign: 'middle', marginRight: '0.4rem' }} /> {actionMsg}
         </div>
       )}
+
+      <CropMspRatePanel />
 
       {/* 4 State Top Metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>

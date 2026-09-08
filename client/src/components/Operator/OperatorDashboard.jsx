@@ -15,6 +15,7 @@ import {
   resetCentreAPI, updateOperatorCentreStatus
 } from '../../services/api';
 import useRealtimePolling from '../../hooks/useRealtimePolling';
+import CropMspRatePanel from '../Officer/CropMspRatePanel';
 
 const STATUS_STEPS = [
   { key: 'WAITING', label: 'In Queue', icon: '🕐', color: '#f59e0b' },
@@ -534,6 +535,8 @@ export default function OperatorDashboard({ centres = [], selectedCentreId = 'ce
         </div>
       )}
 
+      <CropMspRatePanel compact />
+
       {/* Overview Stats Bar */}
       <div className="overview-stats-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
         <div className="card" style={{ textAlign: 'center', padding: '0.9rem' }}>
@@ -584,6 +587,7 @@ export default function OperatorDashboard({ centres = [], selectedCentreId = 'ce
                     fontSize: '1rem',
                     fontWeight: 800
                   }}
+
                 >
                   <Play size={18} /> {actionLoading === 'next' ? 'Calling...' : '📢 CALL NEXT FARMER'}
                 </button>
