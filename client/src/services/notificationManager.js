@@ -19,6 +19,14 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
+function sameApplicationServerKey(subscription, publicKey) {
+    const configuredKey = subscription && subscription.options && subscription.options.applicationServerKey;
+    if (!configuredKey) return true;
+    const currentKey = urlBase64ToUint8Array(publicKey);
+    const savedKey = new Uint8Array(configuredKey);
+    return currentKey.length === savedKey.length && currentKey.every((byte, index) => byte === savedKey[index]);
+}
+
 function getUserInfo() {
     let userId = localStorage.getItem('agriflow_user_id') || localStorage.getItem('userId');
     if (!userId || userId === 'anonymous') {
@@ -91,22 +99,27 @@ export async function subscribeToRealWebPush() {
     }
 
     try {
-        // Check if already subscribed
+        // Check if already subscribed. Recreate it when the server VAPID key
+        // changed, otherwise the push provider rejects every real notification.
         let sub = await swRegistration.pushManager.getSubscription();
 
+        const keyRes = await fetch('/api/notifications/vapid-public-key');
+        if (!keyRes.ok) throw new Error(`VAPID key fetch failed: ${keyRes.status}`);
+        const keyData = await keyRes.json();
+        if (!keyData.publicKey) throw new Error('Server returned no VAPID public key');
+
+        if (sub && !sameApplicationServerKey(sub, keyData.publicKey)) {
+            await sub.unsubscribe();
+            sub = null;
+            console.log('[AGRIFlow Push] VAPID key changed; creating a fresh device subscription.');
+        }
+
         if (!sub) {
-            // Fetch VAPID public key from our server
-            const res = await fetch('/api/notifications/vapid-public-key');
-            if (!res.ok) throw new Error(`VAPID key fetch failed: ${res.status}`);
-
-            const data = await res.json();
-            if (!data.publicKey) throw new Error('Server returned no VAPID public key');
-
             console.log('[AGRIFlow Push] Got VAPID key, subscribing with Google FCM / Apple APNs...');
 
             sub = await swRegistration.pushManager.subscribe({
                 userVisibleOnly: true, // Required — tells browser this will only show visible notifications
-                applicationServerKey: urlBase64ToUint8Array(data.publicKey)
+                applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
             });
 
             console.log('[AGRIFlow Push] ✅ PushSubscription created! Device registered with push service.');
