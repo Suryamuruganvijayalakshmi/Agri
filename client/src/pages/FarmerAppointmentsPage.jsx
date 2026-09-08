@@ -53,6 +53,14 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
   const [quickBookingSuccess, setQuickBookingSuccess] = useState(null);
   const [quickBookingError, setQuickBookingError] = useState(null);
 
+  const isFutureBookingDate = date > getTodayLocalDateStr();
+  const getSlotCapacity = (slot) => {
+    const available = slot.available_positions_count;
+    if (Number.isFinite(available)) return available;
+    return Math.max(0, (slot.maximum_bookings || 20) - (slot.current_bookings || 0));
+  };
+  const selectableSlots = slots.filter((slot) => getSlotCapacity(slot) > 0 && (isFutureBookingDate || !slot.is_past));
+
   // Storage bays needed: 500 kg per bay
   const neededBays = Math.max(1, Math.ceil(Number(quantity || 0) / 500));
 
@@ -118,11 +126,16 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
             if (rec && rec.is_available && !rec.is_past) return rec;
           }
           // Prioritize current active slot, then upcoming available slot
-          return res.slots.find(s => s.is_current && s.is_available)
-            || res.slots.find(s => s.is_upcoming && s.is_available)
-            || res.slots.find(s => s.is_available && !s.is_past)
-            || res.slots.find(s => s.is_available)
-            || res.slots[0];
+          const availableForDate = res.slots.filter(s => {
+            const available = Number.isFinite(s.available_positions_count)
+              ? s.available_positions_count > 0
+              : (s.maximum_bookings || 20) > (s.current_bookings || 0);
+            return available && (date > getTodayLocalDateStr() || !s.is_past);
+          });
+          return availableForDate.find(s => s.is_current)
+            || availableForDate.find(s => s.is_upcoming)
+            || availableForDate[0]
+            || null;
         });
       }
     } catch (e) {
@@ -434,13 +447,13 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
-            {slots.map(s => {
+            {selectableSlots.map(s => {
               const max = s.maximum_bookings || 20;
               const booked = s.current_bookings || 0;
-              const avail = Math.max(0, max - booked);
-              const isPast = Boolean(s.is_past);
+              const avail = getSlotCapacity(s);
+              const isPast = !isFutureBookingDate && Boolean(s.is_past);
               const isCurrent = Boolean(s.is_current);
-              const isFull = booked >= max || !s.is_available;
+              const isFull = avail <= 0;
               const isSelected = selectedSlot?.id === s.id;
 
               return (
@@ -526,6 +539,11 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
                 </div>
               );
             })}
+            {selectableSlots.length === 0 && (
+              <div style={{ gridColumn: '1 / -1', padding: '1rem', borderRadius: '10px', background: '#fef3c7', color: '#92400e', fontWeight: 700, fontSize: '0.85rem' }}>
+                No open 1,000 kg slots are available for this date.
+              </div>
+            )}
           </div>
         )}
 
@@ -567,6 +585,7 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
           farmerName={activeFarmerName}
           crop={crop}
           quantityKg={quantity}
+          appointmentDate={date}
           onBookingSuccess={() => {
             loadSlots();
           }}
