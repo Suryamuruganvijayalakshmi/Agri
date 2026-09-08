@@ -230,14 +230,14 @@ export const seedMongoBaselineData = async() => {
         }
 
         // Seed default crop products used by farmer estimates and officer MSP control.
-        const productCount = await Product.countDocuments();
-        if (productCount === 0) {
-            await Product.insertMany([
-                { id: 'prod-paddy', name: 'Paddy (Sona Masoori)', category: 'Grain', package_weight_kg: 50, msp_price_per_kg: 22, moisture_threshold_percent: 14, status: 'APPROVED' },
-                { id: 'prod-groundnut', name: 'Groundnut', category: 'Oilseed', package_weight_kg: 50, msp_price_per_kg: 68, moisture_threshold_percent: 10, status: 'APPROVED' },
-                { id: 'prod-maize', name: 'Maize', category: 'Grain', package_weight_kg: 50, msp_price_per_kg: 22, moisture_threshold_percent: 14, status: 'APPROVED' },
-                { id: 'prod-sugarcane', name: 'Sugarcane', category: 'Cash Crop', package_weight_kg: 100, msp_price_per_kg: 3.4, moisture_threshold_percent: 18, status: 'APPROVED' }
-            ]);
+        const defaultProducts = [
+            { id: 'prod-paddy', name: 'Paddy (Sona Masoori)', category: 'Grain', package_weight_kg: 50, msp_price_per_kg: 22, moisture_threshold_percent: 14, status: 'APPROVED' },
+            { id: 'prod-groundnut', name: 'Groundnut', category: 'Oilseed', package_weight_kg: 50, msp_price_per_kg: 68, moisture_threshold_percent: 10, status: 'APPROVED' },
+            { id: 'prod-maize', name: 'Maize', category: 'Grain', package_weight_kg: 50, msp_price_per_kg: 22, moisture_threshold_percent: 14, status: 'APPROVED' },
+            { id: 'prod-sugarcane', name: 'Sugarcane', category: 'Cash Crop', package_weight_kg: 100, msp_price_per_kg: 3.4, moisture_threshold_percent: 18, status: 'APPROVED' }
+        ];
+        for (const product of defaultProducts) {
+            await Product.updateOne({ id: product.id }, { $setOnInsert: product }, { upsert: true });
         }
 
         // Seed Sample Government Land Parcels (Simulated Bhoomi / RTC Integration)
