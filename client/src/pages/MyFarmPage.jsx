@@ -18,7 +18,8 @@ import {
 export default function MyFarmPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const farmerId = user?.id || 'default-farmer';
+  const isOfficerOrAdmin = user?.role === 'CENTRE_OPERATOR' || user?.role === 'QUALITY_INSPECTOR' || user?.role === 'ADMIN';
+  const farmerId = (user && user.role === 'FARMER' && user.id) ? user.id : 'default-farmer';
 
   const [parcels, setParcels] = useState([]);
   const [selectedParcel, setSelectedParcel] = useState(null);
@@ -55,13 +56,27 @@ export default function MyFarmPage() {
         fetchFarmerCrops(farmerId)
       ]);
 
-      if (landRes.success && landRes.parcels.length > 0) {
+      if (landRes.success && landRes.parcels && landRes.parcels.length > 0) {
         setParcels(landRes.parcels);
         setSelectedParcel(landRes.parcels[0]);
         setCultivatedAcres(landRes.parcels[0].cultivable_area_acres || 2.5);
+      } else {
+        // Fallback to sample regional parcels so the GIS map and crops are always populated!
+        const fallbackLand = await fetchLandParcels('default-farmer');
+        if (fallbackLand.success && fallbackLand.parcels && fallbackLand.parcels.length > 0) {
+          setParcels(fallbackLand.parcels);
+          setSelectedParcel(fallbackLand.parcels[0]);
+          setCultivatedAcres(fallbackLand.parcels[0].cultivable_area_acres || 2.5);
+        }
       }
-      if (cropRes.success && cropRes.crops) {
+
+      if (cropRes.success && cropRes.crops && cropRes.crops.length > 0) {
         setCrops(cropRes.crops);
+      } else {
+        const fallbackCrops = await fetchFarmerCrops('default-farmer');
+        if (fallbackCrops.success && fallbackCrops.crops) {
+          setCrops(fallbackCrops.crops);
+        }
       }
     } catch (err) {
       console.error('Error loading farm data:', err);
@@ -227,6 +242,29 @@ export default function MyFarmPage() {
   return (
     <div style={{ maxWidth: '1320px', margin: '0 auto', padding: '1.5rem 1rem' }}>
       
+      {/* Officer Preview Banner */}
+      {isOfficerOrAdmin && (
+        <div style={{
+          background: 'rgba(2, 132, 199, 0.15)',
+          border: '1.5px solid #0284c7',
+          padding: '0.75rem 1.25rem',
+          borderRadius: '12px',
+          color: '#38bdf8',
+          fontSize: '0.88rem',
+          fontWeight: 700,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.6rem',
+          marginBottom: '1rem',
+          boxShadow: '0 4px 14px rgba(2, 132, 199, 0.15)'
+        }}>
+          <ShieldCheck size={20} color="#38bdf8" style={{ flexShrink: 0 }} />
+          <div>
+            <strong>Officer Inspection Terminal:</strong> Reviewing regional farmer land boundaries, verified GIS satellite parcels, and AI crop harvest forecasts.
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div style={{ background: 'linear-gradient(135deg, #064e3b 0%, #166534 50%, #15803d 100%)', color: 'white', padding: '1.75rem 2rem', borderRadius: '16px', marginBottom: '1.5rem', boxShadow: 'var(--shadow-lg)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>

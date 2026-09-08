@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
 import { socket } from '../../services/socket';
 import { fetchSlotPositions, bookPhoneWhatsappAPI, bookAppointmentPosition } from '../../services/api';
 import { CheckCircle2, AlertTriangle, RefreshCw, Sparkles, QrCode, Warehouse, Box, PhoneCall, MessageSquare, Send, Smartphone, MousePointerClick } from 'lucide-react';
@@ -49,22 +48,8 @@ export default function FarmerBookingPositionGrid({
       setLoading(true);
       setErrorMsg(null);
 
-      // 1. Try Supabase database
-      const { data: supaData, error: supaErr } = await supabase
-        .from('slot_positions')
-        .select('*')
-        .eq('slot_id', slotId)
-        .order('position_number', { ascending: true });
-
-      if (!supaErr && supaData && supaData.length > 0) {
-        setPositions(supaData);
-        setLoading(false);
-        return;
-      }
-
-      // 2. Fallback Express backend API
       const res = await fetchSlotPositions(slotId);
-      if (res.success && res.positions) {
+      if (res.success && res.positions && res.positions.length > 0) {
         setPositions(res.positions);
       } else {
         const freshPositions = Array.from({ length: totalPositions }, (_, i) => {
@@ -88,28 +73,8 @@ export default function FarmerBookingPositionGrid({
   useEffect(() => {
     loadPositions();
 
-    // Supabase Realtime
-    const channelName = `realtime_slot_positions_${slotId}`;
-    const channelSub = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'slot_positions', filter: `slot_id=eq.${slotId}` },
-        (payload) => {
-          setRealtimePulse(true);
-          setTimeout(() => setRealtimePulse(false), 1200);
-          if (payload.eventType === 'UPDATE' && payload.new) {
-            setPositions(prev => prev.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p));
-          } else {
-            loadPositions();
-          }
-        }
-      )
-      .subscribe();
-
-    // ── REALTIME: when officer updates capacity → reload positions ──
+    // ── REALTIME: when officer updates capacity or bookings occur ──
     const handleCentresUpdated = (updatedCentres) => {
-      // Only re-render if our centre's capacity changed
       if (!centre) return;
       const fresh = Array.isArray(updatedCentres)
         ? updatedCentres.find(c => c.id === centre.id)
@@ -128,14 +93,18 @@ export default function FarmerBookingPositionGrid({
     socket.on('slot_position_updated', handleSlotUpdated);
     socket.on('appointment_booked', loadPositions);
 
+    // 4-second polling fallback for serverless
+    const pollTimer = setInterval(loadPositions, 4000);
+
     return () => {
-      supabase.removeChannel(channelSub);
       socket.off('centres_updated', handleCentresUpdated);
       socket.off('centre_capacity_changed', handleCentresUpdated);
       socket.off('slot_position_updated', handleSlotUpdated);
       socket.off('appointment_booked', loadPositions);
+      clearInterval(pollTimer);
     };
   }, [slotId, centre?.id, centre?.daily_capacity_kg]);
+
 
   // Derived counts & Storage Area Square metrics
   const bookedCount = positions.filter(p => p.status === 'BOOKED').length;
@@ -160,29 +129,6 @@ export default function FarmerBookingPositionGrid({
     setConfirmedBooking(null);
 
     try {
-      // 1. Try Supabase RPC
-      const { data: supaRpcData, error: rpcErr } = await supabase.rpc('book_appointment_position', {
-        p_farmer_id: null,
-        p_farmer_name: farmerName,
-        p_centre_id: centre?.id || 'centre-1',
-        p_slot_id: slotId,
-        p_position_number: selectedPosition.position_number,
-        p_crop_type: crop,
-        p_declared_quantity_kg: Number(quantityKg)
-      });
-
-      if (!rpcErr && supaRpcData && supaRpcData.success) {
-        setBookingSuccessMsg(`Direct Web Booking Confirmed for Storage Bay #${selectedPosition.position_number}!`);
-        setConfirmedBooking(supaRpcData.appointment);
-        setShowQrModal(true);
-        setSelectedPosition(null);
-        loadPositions();
-        if (onBookingSuccess) onBookingSuccess(supaRpcData.appointment);
-        setBookingLoading(false);
-        return;
-      }
-
-      // 2. Fallback to Express backend API
       const res = await bookAppointmentPosition({
         farmer_id: farmerId,
         farmer_name: farmerName,
@@ -192,6 +138,7 @@ export default function FarmerBookingPositionGrid({
         crop_type: crop,
         declared_quantity_kg: Number(quantityKg)
       });
+
 
       if (!res.success) {
         setErrorMsg(res.error || 'Position was just booked by another farmer. Please choose another square.');

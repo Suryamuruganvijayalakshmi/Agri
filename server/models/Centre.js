@@ -4,6 +4,8 @@ const centreSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, index: true },
   code: { type: String, required: true, unique: true },
   name: { type: String, required: true },
+  token_prefix: { type: String, default: 'A' },
+  current_token_counter: { type: Number, default: 0 },
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
   address: { type: String },

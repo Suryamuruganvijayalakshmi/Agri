@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
@@ -13,7 +13,9 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import FarmerDashboard from './components/Farmer/FarmerDashboard';
 import FarmerProfilePage from './pages/FarmerProfilePage';
 import FarmerMapPage from './pages/FarmerMapPage';
+import FindCentrePage from './pages/FindCentrePage';
 import FarmerAppointmentsPage from './pages/FarmerAppointmentsPage';
+
 import FarmerQueuePage from './pages/FarmerQueuePage';
 import FarmerProcurementPage from './pages/FarmerProcurementPage';
 import FarmerPaymentsPage from './pages/FarmerPaymentsPage';
@@ -40,6 +42,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
   const [resetting, setResetting] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
+  const location = useLocation();
   const t = translations[lang] || translations.en;
 
   // Fetch unread notification count for farmers
@@ -51,7 +54,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
         const res = await fetch(`/api/notifications/${farmerId}/unread-count`);
         const data = await res.json();
         if (data.success) setUnreadCount(data.count || 0);
-      } catch {}
+      } catch { }
     };
     fetchCount();
 
@@ -91,13 +94,13 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
       <div style={{ background: '#166534', padding: '0.4rem 1rem', fontSize: '0.8rem', textAlign: 'center', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
         <span>"Don't just give farmers a token. Give them a predictable procurement journey."</span>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
-          <button 
+          <button
             onClick={onOpenDemoModal}
             style={{ background: '#f59e0b', color: '#78350f', border: 'none', padding: '0.15rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
           >
             <Zap size={12} /> Run 5-Min Pitch Demo
           </button>
-          <button 
+          <button
             onClick={handleResetSite}
             disabled={resetting}
             style={{ background: '#dc2626', color: 'white', border: 'none', padding: '0.15rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
@@ -108,7 +111,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
       </div>
 
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-        
+
         {/* AGRIFlow Brand Link */}
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'white', textDecoration: 'none' }}>
           <div style={{ background: '#16a34a', padding: '0.5rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -131,17 +134,26 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
 
         {/* Role-based navigation */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          
+
+          {/* Guest navigation */}
+          {!user && (
+            <div style={{ display: 'flex', gap: '0.35rem', fontSize: '0.85rem' }}>
+              <Link to="/farmer/centres" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>🏢 Centres</Link>
+              <Link to="/farmer/map" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>🗺️ Facilities Map</Link>
+            </div>
+          )}
+
           {role === 'FARMER' && (
             <div style={{ display: 'flex', gap: '0.35rem', fontSize: '0.85rem' }}>
               <Link to="/farmer/dashboard" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Dashboard</Link>
-              <Link to="/farmer/my-farm" style={{ color: '#22c55e', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>🌾 My Farm & Land</Link>
-              <Link to="/farmer/profile" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Profile</Link>
-              <Link to="/farmer/map" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Live Map</Link>
+              <Link to="/farmer/my-farm" style={{ color: '#4ade80', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 800 }}>🌾 My Farm</Link>
+              <Link to="/farmer/centres" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>🏢 Centres</Link>
+              <Link to="/farmer/map" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>🗺️ Facilities Map</Link>
               <Link to="/farmer/appointments" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Book Slot</Link>
               <Link to="/farmer/queue" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Live Queue</Link>
               <Link to="/farmer/procurement" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Timeline</Link>
               <Link to="/farmer/payments" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>DBT Payments</Link>
+
               <Link to="/farmer/notifications"
                 onClick={() => setUnreadCount(0)}
                 style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600, position: 'relative', display: 'inline-flex', alignItems: 'center' }}
@@ -161,11 +173,91 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
           )}
 
           {role === 'CENTRE_OPERATOR' && (
-            <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.85rem' }}>
-              <Link to="/operator/appointments" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Operator Console</Link>
-              <Link to="/operator/queue" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Realtime Queue</Link>
-              <Link to="/operator/weighment" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Weighbridge</Link>
-              <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>✨ Crop Forecast & AI</Link>
+            <div style={{ display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}>
+              <Link
+                to="/operator/appointments"
+                style={{
+                  color: (location.pathname === '/operator/appointments' || location.pathname === '/operator') ? '#4ade80' : '#cbd5e1',
+                  background: (location.pathname === '/operator/appointments' || location.pathname === '/operator') ? 'rgba(74, 222, 128, 0.15)' : 'transparent',
+                  border: (location.pathname === '/operator/appointments' || location.pathname === '/operator') ? '1px solid #16a34a' : '1px solid transparent',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700
+                }}
+              >
+                🖥️ Console
+              </Link>
+              <Link
+                to="/operator/queue"
+                style={{
+                  color: location.pathname === '/operator/queue' ? '#38bdf8' : '#cbd5e1',
+                  background: location.pathname === '/operator/queue' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                  border: location.pathname === '/operator/queue' ? '1px solid #0284c7' : '1px solid transparent',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700
+                }}
+              >
+                🔔 Realtime Queue
+              </Link>
+              <Link
+                to="/operator/weighment"
+                style={{
+                  color: location.pathname === '/operator/weighment' ? '#06b6d4' : '#cbd5e1',
+                  background: location.pathname === '/operator/weighment' ? 'rgba(6, 182, 212, 0.15)' : 'transparent',
+                  border: location.pathname === '/operator/weighment' ? '1px solid #0891b2' : '1px solid transparent',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700
+                }}
+              >
+                ⚖️ Weighbridge
+              </Link>
+              <Link
+                to="/operator/quality"
+                style={{
+                  color: location.pathname === '/operator/quality' ? '#10b981' : '#cbd5e1',
+                  background: location.pathname === '/operator/quality' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                  border: location.pathname === '/operator/quality' ? '1px solid #059669' : '1px solid transparent',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700
+                }}
+              >
+                🔬 Quality Check
+              </Link>
+              <Link
+                to="/operator/payments"
+                style={{
+                  color: location.pathname === '/operator/payments' ? '#a855f7' : '#cbd5e1',
+                  background: location.pathname === '/operator/payments' ? 'rgba(168, 85, 247, 0.15)' : 'transparent',
+                  border: location.pathname === '/operator/payments' ? '1px solid #9333ea' : '1px solid transparent',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700
+                }}
+              >
+                💳 Payment Steps
+              </Link>
+              <Link
+                to="/govt/crop-intelligence"
+                style={{
+                  color: location.pathname === '/govt/crop-intelligence' ? '#fbbf24' : '#f59e0b',
+                  background: location.pathname === '/govt/crop-intelligence' ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+                  border: location.pathname === '/govt/crop-intelligence' ? '1px solid #d97706' : '1px solid transparent',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700
+                }}
+              >
+                ✨ Crop Forecast & AI
+              </Link>
             </div>
           )}
 
@@ -179,6 +271,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
           {(role === 'DISTRICT_OFFICER' || role === 'STATE_ADMIN') && (
             <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.85rem' }}>
               <Link to="/admin/overview" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Overview</Link>
+              <Link to="/farmer/my-farm" style={{ color: '#4ade80', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>🌾 My Farm</Link>
               <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>✨ Crop Forecast & AI</Link>
               <Link to="/admin/centres" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Centres</Link>
               <Link to="/admin/analytics" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Analytics</Link>
@@ -186,18 +279,18 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
           )}
 
           {/* Language Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#1e293b', padding: '0.35rem 0.65rem', borderRadius: '8px', border: '1px solid #334155' }}>
-            <Globe size={14} color="#94a3b8" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <Globe size={15} color="#94a3b8" />
             <select
               value={lang}
               onChange={(e) => setLang(e.target.value)}
-              style={{ background: 'transparent', color: 'white', border: 'none', fontSize: '0.8rem', fontWeight: 600, outline: 'none', cursor: 'pointer' }}
+              className="nav-select"
             >
-              <option value="en" style={{ background: '#0f172a' }}>English</option>
-              <option value="hi" style={{ background: '#0f172a' }}>हिंदी (Hindi)</option>
-              <option value="kn" style={{ background: '#0f172a' }}>ಕನ್ನಡ (Kannada)</option>
-              <option value="ta" style={{ background: '#0f172a' }}>தமிழ் (Tamil)</option>
-              <option value="te" style={{ background: '#0f172a' }}>తెలుగు (Telugu)</option>
+              <option value="en">English (EN)</option>
+              <option value="hi">हिंदी (Hindi)</option>
+              <option value="kn">ಕನ್ನಡ (Kannada)</option>
+              <option value="ta">தமிழ் (Tamil)</option>
+              <option value="te">తెలుగు (Telugu)</option>
             </select>
           </div>
 
@@ -328,7 +421,24 @@ function MainAppContent() {
             }
           />
           <Route
+            path="/farmer/centres"
+            element={
+              <ProtectedRoute allowedRoles={['FARMER']} loginPath="/farmer/login">
+                <FindCentrePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/farmer/find-centre"
+            element={
+              <ProtectedRoute allowedRoles={['FARMER']} loginPath="/farmer/login">
+                <FindCentrePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/farmer/book"
+
             element={
               <ProtectedRoute allowedRoles={['FARMER']} loginPath="/farmer/login">
                 <FarmerAppointmentsPage centres={centres} />
@@ -393,11 +503,11 @@ function MainAppContent() {
           />
           <Route
             path="/farmer/my-farm"
-            element={
-              <ProtectedRoute allowedRoles={['FARMER']} loginPath="/farmer/login">
-                <MyFarmPage />
-              </ProtectedRoute>
-            }
+            element={<MyFarmPage />}
+          />
+          <Route
+            path="/my-farm"
+            element={<Navigate to="/farmer/my-farm" replace />}
           />
           <Route
             path="/govt/crop-intelligence"
@@ -429,6 +539,26 @@ function MainAppContent() {
                 <OperatorDashboard centres={centres} selectedCentreId={localStorage.getItem('agriflow_selected_centre_id') || 'centre-1'} onDataChanged={loadMasterCentres} />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/operator/quality"
+            element={
+              <ProtectedRoute allowedRoles={['CENTRE_OPERATOR']} loginPath="/government/login">
+                <OperatorDashboard centres={centres} selectedCentreId={localStorage.getItem('agriflow_selected_centre_id') || 'centre-1'} onDataChanged={loadMasterCentres} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/operator/payments"
+            element={
+              <ProtectedRoute allowedRoles={['CENTRE_OPERATOR']} loginPath="/government/login">
+                <OperatorDashboard centres={centres} selectedCentreId={localStorage.getItem('agriflow_selected_centre_id') || 'centre-1'} onDataChanged={loadMasterCentres} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/operator/payment"
+            element={<Navigate to="/operator/payments" replace />}
           />
           <Route
             path="/operator/counters"

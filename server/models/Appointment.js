@@ -15,8 +15,20 @@ const appointmentSchema = new mongoose.Schema({
   appointment_date: { type: String },
   time_slot: { type: String },
   crop_type: { type: String, default: 'Paddy' },
+  quantity_kg: { type: Number, default: 0 },
   declared_quantity_kg: { type: Number, required: true },
-  status: { type: String, enum: ['BOOKED', 'CHECKED_IN', 'IN_TRANSIT', 'WEIGHED', 'APPROVED', 'PAID', 'CANCELLED'], default: 'BOOKED', index: true }
+  actual_weight_kg: { type: Number, default: 0 },
+  quality_grade: { type: String, default: '' },
+  quality_moisture: { type: String, default: '' },
+  status: {
+    type: String,
+    enum: ['BOOKED', 'WAITING', 'CALLED', 'PROCESSING', 'WEIGHMENT', 'QUALITY_CHECK', 'COMPLETED', 'CANCELLED'],
+    default: 'BOOKED',
+    index: true
+  }
 }, { timestamps: true });
+
+// Compound index for unique tokens per centre per date
+appointmentSchema.index({ centre_id: 1, token_number: 1, appointment_date: 1 }, { unique: true });
 
 export const Appointment = mongoose.model('Appointment', appointmentSchema);

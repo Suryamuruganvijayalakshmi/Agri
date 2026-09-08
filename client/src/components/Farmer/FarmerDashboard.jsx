@@ -1,269 +1,393 @@
-import React, { useState, useEffect } from 'react';
-import { MapPin, ShieldCheck, Clock, Award, Bell, ChevronRight, RefreshCw, AlertCircle, ArrowUpRight } from 'lucide-react';
-import ProcurementMap from '../Map/ProcurementMap';
-import BookingModal from './BookingModal';
-import GoIntelligenceWidget from './GoIntelligenceWidget';
-import ProcurementTimeline from './ProcurementTimeline';
-import { fetchRecommendations, fetchFarmerTimeline } from '../../services/api';
-import { translations } from '../../i18n/translations';
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import {
+  MapPin, Clock, Award, Bell, ChevronRight, RefreshCw, Zap,
+  CheckCircle2, CreditCard, ArrowRight, Warehouse, AlertCircle,
+  FileText, Droplets, Calendar, Sparkles
+} from 'lucide-react';
+import { fetchFarmerDashboard } from '../../services/api';
+import useRealtimePolling from '../../hooks/useRealtimePolling';
 
-export default function FarmerDashboard({ centres, farmerId = 'F-1042', lang = 'en' }) {
-  const t = translations[lang] || translations.en;
+export default function FarmerDashboard({ centres = [], lang = 'en' }) {
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
 
-  const [recommendation, setRecommendation] = useState(null);
-  const [timeline, setTimeline] = useState(null);
-  const [selectedCentre, setSelectedCentre] = useState(null);
-  const [bookingCentre, setBookingCentre] = useState(null);
-  const [activeTab, setActiveTab] = useState('MAP'); // 'MAP', 'TIMELINE', 'NOTIFICATIONS'
-  const [loadingRec, setLoadingRec] = useState(true);
+  const activeFarmerId = user?.id || 'default-farmer';
+  const farmerName = profile?.full_name || user?.full_name || 'Farmer';
+  const farmerPhone = profile?.phone || user?.phone || '';
 
-  const loadFarmerData = async () => {
-    try {
-      setLoadingRec(true);
-      const recData = await fetchRecommendations(12.5200, 76.8900, 2500);
-      if (recData.success) {
-        setRecommendation(recData);
-      }
+  // Real-time polling hook for farmer dashboard data (3s interval + socket events)
+  const { data: dashData, loading, refresh, realtimePulse } = useRealtimePolling(
+    () => fetchFarmerDashboard(activeFarmerId),
+    3000,
+    ['queue_updated', 'appointment_booked', 'payment_updated', 'centre_capacity_changed'],
+    [activeFarmerId]
+  );
 
-      const timelineData = await fetchFarmerTimeline(farmerId);
-      if (timelineData.success) {
-        setTimeline(timelineData.timeline);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingRec(false);
-    }
-  };
+  const activeBooking = dashData?.active_booking || null;
+  const queueData = dashData?.queue || null;
+  const activeProcurement = dashData?.procurement || null;
+  const activePayment = dashData?.payment || null;
+  const lastCompleted = dashData?.last_completed || null;
+  const lastPayment = dashData?.last_payment || null;
+  const history = dashData?.history || [];
 
-  useEffect(() => {
-    loadFarmerData();
-  }, [centres]);
+  // Stage progress mapping
+  const stages = [
+    { key: 'BOOKED', label: 'Booked', desc: 'Slot confirmed' },
+    { key: 'WAITING', label: 'In Queue', desc: 'Awaiting turn' },
+    { key: 'CALLED', label: 'Called', desc: 'Proceed to counter' },
+    { key: 'PROCESSING', label: 'Processing', desc: 'Counter active' },
+    { key: 'WEIGHMENT', label: 'Weighment', desc: 'Produce weighed' },
+    { key: 'QUALITY_CHECK', label: 'Quality', desc: 'Lab verification' },
+    { key: 'COMPLETED', label: 'Completed', desc: 'Payment issued' }
+  ];
 
-  const bestCentre = recommendation?.recommended_centre;
+  const currentStatus = activeBooking?.status || (lastCompleted ? 'COMPLETED' : 'NOT_BOOKED');
+  const currentStageIndex = stages.findIndex(s => s.key === currentStatus);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Farmer Greeting & Immediate Answer Cards Header */}
-      <div className="card" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', border: 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '0 0.5rem' }}>
+
+      {/* ── TOP HERO BANNER ──────────────────────────────────────── */}
+      <div className="card" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', border: 'none', padding: '1.75rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <div style={{ fontSize: '0.8rem', color: '#4ade80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              📍 Mandya District Farmer Portal
+            <div style={{ fontSize: '0.8rem', color: '#4ade80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Sparkles size={14} /> Mandya District Farmer Procurement Portal
             </div>
-            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0.2rem 0 0 0' }}>
-              Good Morning, Ramesh Gowda
+            <h1 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '0.3rem 0 0 0', fontFamily: 'Outfit, sans-serif' }}>
+              Welcome, {farmerName}
             </h1>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '0.2rem 0 0 0' }}>
-              Farmer ID: <strong>{farmerId}</strong> • Landholding: 4.5 Acres (Sona Masoori Paddy)
+              Farmer ID: <strong style={{ color: '#e2e8f0' }}>{activeFarmerId}</strong>
+              {farmerPhone && ` • Mobile: ${farmerPhone}`}
+              {user?.district && ` • District: ${user.district}`}
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', fontWeight: 800, color: '#4ade80', background: 'rgba(74, 222, 128, 0.1)', border: '1px solid rgba(74, 222, 128, 0.3)', padding: '0.35rem 0.75rem', borderRadius: '9999px' }}>
+              <Zap size={12} /> {realtimePulse ? 'UPDATING...' : 'LIVE REAL-TIME'}
+            </span>
             <button
-              onClick={() => setActiveTab('MAP')}
-              className={`btn ${activeTab === 'MAP' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+              onClick={refresh}
+              className="btn btn-secondary btn-sm"
+              style={{ background: '#334155', color: 'white', border: 'none', padding: '0.4rem 0.75rem' }}
             >
-              📍 Live Map & Booking
+              <RefreshCw size={14} className={loading ? 'spin' : ''} /> Refresh
             </button>
-            <button
-              onClick={() => setActiveTab('TIMELINE')}
-              className={`btn ${activeTab === 'TIMELINE' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+            <Link
+              to="/farmer/centres"
+              className="btn btn-primary btn-sm"
+              style={{ padding: '0.4rem 0.85rem' }}
             >
-              📋 My Procurement ({timeline?.active_procurement ? '1 Active' : '0'})
-            </button>
-          </div>
-        </div>
-
-        {/* 5 Core Questions Bar */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-          <div style={{ background: 'rgba(255,255,255,0.06)', padding: '0.75rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700 }}>1. WHERE SHOULD I GO?</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#4ade80', marginTop: '0.2rem' }}>
-              {bestCentre ? bestCentre.name : 'Loading...'}
-            </div>
-          </div>
-
-          <div style={{ background: 'rgba(255,255,255,0.06)', padding: '0.75rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700 }}>2. CAN CENTRE HANDLE IT?</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'white', marginTop: '0.2rem' }}>
-              {bestCentre ? `${bestCentre.remaining_capacity_kg.toLocaleString()} kg remaining` : 'Yes, 19k kg'}
-            </div>
-          </div>
-
-          <div style={{ background: 'rgba(255,255,255,0.06)', padding: '0.75rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700 }}>3. WHEN SHOULD I GO?</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f59e0b', marginTop: '0.2rem' }}>
-              Slot: 10:30 AM (14 min wait)
-            </div>
-          </div>
-
-          <div style={{ background: 'rgba(255,255,255,0.06)', padding: '0.75rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700 }}>4. PROCUREMENT STATUS</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#60a5fa', marginTop: '0.2rem' }}>
-              {timeline?.active_procurement ? timeline.active_procurement.status.replace('_', ' ') : 'Ready to Book'}
-            </div>
-          </div>
-
-          <div style={{ background: 'rgba(255,255,255,0.06)', padding: '0.75rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 700 }}>5. PAYMENT STATUS</div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f472b6', marginTop: '0.2rem' }}>
-              {timeline?.payments?.[0] ? timeline.payments[0].status : 'Pending Voucher'}
-            </div>
+              🏢 Find Centres
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Main Tab Content */}
-      {activeTab === 'MAP' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '1.5rem' }}>
-          {/* Left Column: Live Map */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div className="card-header" style={{ marginBottom: 0 }}>
+      {/* ── 4 CORE REAL-TIME STATUS CARDS ───────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+
+        {/* 1. Active Token & Centre */}
+        <div className="card" style={{ padding: '1.25rem', borderLeft: activeBooking ? '5px solid #16a34a' : '5px solid #94a3b8' }}>
+          <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            MY ACTIVE TOKEN
+          </div>
+          <div style={{ fontSize: '2rem', fontWeight: 900, color: activeBooking ? '#16a34a' : '#64748b', margin: '0.3rem 0', fontFamily: 'monospace' }}>
+            {activeBooking ? activeBooking.token_number : 'NO TOKEN'}
+          </div>
+          <div style={{ fontSize: '0.825rem', color: '#334155', fontWeight: 600 }}>
+            {activeBooking ? activeBooking.centre_name : 'No active booking today'}
+          </div>
+          {activeBooking ? (
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.3rem' }}>
+              Slot: <strong>{activeBooking.time_slot}</strong> • {activeBooking.crop_type} ({activeBooking.declared_quantity_kg || activeBooking.quantity_kg} kg)
+            </div>
+          ) : (
+            <Link to="/farmer/appointments" style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.8rem', color: '#16a34a', fontWeight: 700 }}>
+              + Book a Slot Now →
+            </Link>
+          )}
+        </div>
+
+        {/* 2. Live Queue Position */}
+        <div className="card" style={{ padding: '1.25rem', borderLeft: queueData?.your_status === 'CALLED' ? '5px solid #ef4444' : '5px solid #3b82f6' }}>
+          <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            LIVE QUEUE POSITION
+          </div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 900, color: queueData?.your_status === 'CALLED' ? '#ef4444' : '#1e293b', margin: '0.3rem 0' }}>
+            {queueData?.your_status === 'CALLED' ? (
+              <span style={{ color: '#ef4444', animation: 'pulse 1s infinite' }}>🔔 YOUR TURN!</span>
+            ) : queueData?.your_position > 0 ? (
+              `#${queueData.your_position} in line`
+            ) : activeBooking?.status === 'COMPLETED' ? (
+              '✅ Completed'
+            ) : (
+              'Not in queue'
+            )}
+          </div>
+          <div style={{ fontSize: '0.825rem', color: '#334155', fontWeight: 600 }}>
+            {queueData?.your_status === 'CALLED'
+              ? 'Token called! Proceed to counter.'
+              : queueData?.your_position > 0
+              ? `Est. Wait: ~${queueData.your_estimated_wait} mins (${queueData.total_in_queue} total)`
+              : 'Queue updates in real-time'}
+          </div>
+          {activeBooking && (
+            <Link to="/farmer/queue" style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.8rem', color: '#2563eb', fontWeight: 700 }}>
+              View Live Counter Screen →
+            </Link>
+          )}
+        </div>
+
+        {/* 3. Procurement Status */}
+        <div className="card" style={{ padding: '1.25rem', borderLeft: '5px solid #8b5cf6' }}>
+          <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            PROCUREMENT STATUS
+          </div>
+          <div style={{ margin: '0.3rem 0' }}>
+            <span style={{
+              display: 'inline-block',
+              padding: '0.3rem 0.75rem',
+              borderRadius: '9999px',
+              fontSize: '0.85rem',
+              fontWeight: 800,
+              background: currentStatus === 'COMPLETED' ? '#dcfce7' : currentStatus === 'CALLED' ? '#fee2e2' : currentStatus === 'PROCESSING' || currentStatus === 'WEIGHMENT' || currentStatus === 'QUALITY_CHECK' ? '#ede9fe' : '#f1f5f9',
+              color: currentStatus === 'COMPLETED' ? '#166534' : currentStatus === 'CALLED' ? '#991b1b' : currentStatus === 'PROCESSING' || currentStatus === 'WEIGHMENT' || currentStatus === 'QUALITY_CHECK' ? '#6b21a8' : '#475569'
+            }}>
+              {currentStatus}
+            </span>
+          </div>
+          <div style={{ fontSize: '0.825rem', color: '#334155', fontWeight: 600 }}>
+            {activeProcurement?.actual_weighed_kg ? `Weighed: ${activeProcurement.actual_weighed_kg} kg` : 'Declared: ' + (activeBooking?.declared_quantity_kg || 0) + ' kg'}
+            {activeProcurement?.quality_grade && activeProcurement.quality_grade !== 'Pending' ? ` • ${activeProcurement.quality_grade}` : ''}
+          </div>
+          <Link to="/farmer/procurement" style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.8rem', color: '#7c3aed', fontWeight: 700 }}>
+            Full Stage Timeline →
+          </Link>
+        </div>
+
+        {/* 4. DBT Payment Status */}
+        <div className="card" style={{ padding: '1.25rem', borderLeft: (activePayment?.status === 'PAID' || lastPayment?.status === 'PAID') ? '5px solid #16a34a' : '5px solid #f59e0b' }}>
+          <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            DBT PAYMENT PAYOUT
+          </div>
+          <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#15803d', margin: '0.3rem 0' }}>
+            ₹{Number(activePayment?.amount || lastPayment?.amount || ((activeBooking?.declared_quantity_kg || 2500) * 22)).toLocaleString()}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 700 }}>
+            <span style={{
+              padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem',
+              background: (activePayment?.status || lastPayment?.status) === 'PAID' ? '#dcfce7' : (activePayment?.status || lastPayment?.status) === 'APPROVED' ? '#ccfbf1' : '#fef3c7',
+              color: (activePayment?.status || lastPayment?.status) === 'PAID' ? '#166534' : (activePayment?.status || lastPayment?.status) === 'APPROVED' ? '#0f766e' : '#78350f'
+            }}>
+              {activePayment?.status || lastPayment?.status || 'PENDING'}
+            </span>
+            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>MSP ₹2,200/Q</span>
+          </div>
+          <Link to="/farmer/payments" style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.8rem', color: '#059669', fontWeight: 700 }}>
+            View Payment Voucher →
+          </Link>
+        </div>
+
+      </div>
+
+      {/* ── REAL-TIME STAGE PROGRESSION TRACKER ──────────────────── */}
+      {activeBooking && (
+        <div className="card" style={{ padding: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                Live Procurement Stage Tracker
+              </h3>
+              <p style={{ fontSize: '0.825rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
+                Synced directly with {activeBooking.centre_name} officer weighbridge and quality station
+              </p>
+            </div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#16a34a', background: '#dcfce7', padding: '0.25rem 0.65rem', borderRadius: '9999px' }}>
+              Token {activeBooking.token_number}
+            </span>
+          </div>
+
+          {/* Stepper Bar */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${stages.length}, 1fr)`, gap: '0.5rem', position: 'relative' }}>
+            {stages.map((stg, idx) => {
+              const isPast = idx < currentStageIndex;
+              const isCurrent = idx === currentStageIndex;
+              const isFuture = idx > currentStageIndex;
+
+              return (
+                <div key={stg.key} style={{ textAlign: 'center' }}>
+                  <div style={{
+                    width: '32px', height: '32px', borderRadius: '50%',
+                    margin: '0 auto 0.4rem auto',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontWeight: 800, fontSize: '0.8rem',
+                    background: isCurrent ? '#16a34a' : isPast ? '#22c55e' : '#e2e8f0',
+                    color: isCurrent || isPast ? 'white' : '#64748b',
+                    boxShadow: isCurrent ? '0 0 0 4px rgba(34, 197, 94, 0.25)' : 'none',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    {isPast ? '✓' : idx + 1}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: isCurrent ? 800 : 600, color: isCurrent ? '#16a34a' : isPast ? '#0f172a' : '#94a3b8' }}>
+                    {stg.label}
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', display: 'none' }}>
+                    {stg.desc}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Prompt banner when called */}
+          {activeBooking.status === 'CALLED' && (
+            <div style={{
+              marginTop: '1.25rem',
+              background: '#fee2e2',
+              border: '2px solid #ef4444',
+              borderRadius: '10px',
+              padding: '1rem 1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              animation: 'pulse 1.5s infinite'
+            }}>
               <div>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <MapPin size={20} color="#16a34a" /> {t.liveMapTitle}
-                </h2>
-                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0 }}>
-                  Real-time capacity utilization across regional yards. Markers update automatically.
+                <strong style={{ color: '#991b1b', fontSize: '1rem' }}>🔔 YOUR TOKEN {activeBooking.token_number} HAS BEEN CALLED!</strong>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.85rem', color: '#7f1d1d' }}>
+                  Please drive your vehicle to Counter 1 at {activeBooking.centre_name} immediately.
                 </p>
               </div>
-
-              {/* Map Legend */}
-              <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem' }}>
-                <span className="badge badge-green">🟢 0-60%</span>
-                <span className="badge badge-yellow">🟡 61-85%</span>
-                <span className="badge badge-red">🔴 86-100%</span>
-                <span className="badge badge-grey">⚫ Closed</span>
-              </div>
+              <Link to="/farmer/queue" className="btn btn-danger btn-sm" style={{ padding: '0.5rem 1rem' }}>
+                Open Counter Screen →
+              </Link>
             </div>
-
-            <ProcurementMap
-              centres={centres}
-              selectedCentreId={selectedCentre?.id}
-              onSelectCentre={(c) => setSelectedCentre(c)}
-              onBookCentre={(c) => setBookingCentre(c)}
-            />
-
-            {/* Go Intelligence Widget */}
-            <GoIntelligenceWidget
-              centreId={selectedCentre?.id || bestCentre?.id || 'centre-1'}
-              onSelectAlternative={() => {
-                const alt = centres.find(c => c.id === 'centre-4');
-                if (alt) setSelectedCentre(alt);
-              }}
-            />
-          </div>
-
-          {/* Right Sidebar: Recommended Centre & Centre Details */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {/* Best Centre For You Recommendation Box */}
-            {bestCentre && (
-              <div className="card" style={{ border: '2px solid #16a34a', background: 'linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <Award size={22} color="#16a34a" />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#14532d', textTransform: 'uppercase' }}>
-                    🏆 BEST CENTRE RECOMMENDED FOR YOU
-                  </span>
-                </div>
-
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.3rem 0' }}>
-                  {bestCentre.name}
-                </h3>
-
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                  <span className={`badge badge-${bestCentre.color_status.toLowerCase()}`}>
-                    {bestCentre.utilization_percent}% Capacity
-                  </span>
-                  <span className="badge badge-grey">📍 {bestCentre.distance_km} km away</span>
-                </div>
-
-                {/* Explainable Reasons List */}
-                <div style={{ background: 'white', padding: '0.75rem', borderRadius: '8px', border: '1px solid #bbf7d0', fontSize: '0.8rem', color: '#334155', marginBottom: '1rem' }}>
-                  <strong style={{ color: '#166534', display: 'block', marginBottom: '0.35rem' }}>
-                    Why this centre is recommended:
-                  </strong>
-                  <ul style={{ paddingLeft: '1.2rem', margin: 0 }}>
-                    {recommendation?.reasons.map((r, idx) => (
-                      <li key={idx} style={{ marginBottom: '0.2rem' }}>{r}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                <button
-                  onClick={() => setBookingCentre(bestCentre)}
-                  className="btn btn-primary btn-lg"
-                  style={{ width: '100%' }}
-                >
-                  Book Capacity Slot at {bestCentre.name.split(' ')[0]}
-                </button>
-              </div>
-            )}
-
-            {/* Selected Centre Detail Card */}
-            {selectedCentre ? (
-              <div className="card">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span className={`badge badge-${selectedCentre.color_status.toLowerCase()}`}>
-                    {selectedCentre.color_status}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{selectedCentre.code}</span>
-                </div>
-
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>
-                  {selectedCentre.name}
-                </h3>
-
-                <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.75rem' }}>
-                  📍 {selectedCentre.address}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #e2e8f0' }}>
-                  <div>Daily Cap: <strong>{selectedCentre.daily_capacity_kg.toLocaleString()} kg</strong></div>
-                  <div>Booked: <strong>{selectedCentre.booked_capacity_kg.toLocaleString()} kg</strong></div>
-                  <div>Remaining: <strong style={{ color: '#16a34a' }}>{selectedCentre.remaining_capacity_kg.toLocaleString()} kg</strong></div>
-                  <div>Queue Size: <strong>{selectedCentre.queue_count} farmers</strong></div>
-                  <div>Est Wait: <strong>{selectedCentre.est_wait_minutes} mins</strong></div>
-                  <div>Active Counters: <strong>{selectedCentre.active_counters} open</strong></div>
-                </div>
-
-                <button
-                  onClick={() => setBookingCentre(selectedCentre)}
-                  disabled={selectedCentre.status === 'CLOSED' || selectedCentre.remaining_capacity_kg <= 0}
-                  className="btn btn-primary btn-md"
-                  style={{ width: '100%' }}
-                >
-                  Book Appointment Here
-                </button>
-              </div>
-            ) : (
-              <div className="card" style={{ padding: '1.25rem', color: '#64748b', textAlign: 'center', fontSize: '0.85rem' }}>
-                Click any marker on the map to view detailed yard metrics & book slots.
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
 
-      {/* Timeline & Payments View */}
-      {activeTab === 'TIMELINE' && (
-        <ProcurementTimeline timeline={timeline} />
-      )}
+      {/* ── FAST ACTION SHORTCUTS ────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+        <Link
+          to="/farmer/my-farm"
+          className="card"
+          style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderLeft: '4px solid #16a34a' }}
+        >
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#15803d' }}>🌾 My Farm — Land Marking & AI Crop Predictions</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>Draw boundary on GIS satellite map, calculate acres & predict crop yields</div>
+          </div>
+          <ChevronRight size={20} color="#16a34a" />
+        </Link>
 
-      {/* Booking Modal */}
-      {bookingCentre && (
-        <BookingModal
-          centre={bookingCentre}
-          farmerId={farmerId}
-          onClose={() => setBookingCentre(null)}
-          onBookingSuccess={() => {
-            loadFarmerData();
-            setActiveTab('TIMELINE');
-          }}
-        />
-      )}
+        <Link
+          to="/farmer/map"
+          className="card"
+          style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderLeft: '4px solid #0284c7' }}
+        >
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0284c7' }}>🗺️ Cold Storage Facilities Map</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>Explore regional cold storages, live capacity & book nearest bay</div>
+          </div>
+          <ChevronRight size={20} color="#0284c7" />
+        </Link>
+
+        <Link
+          to="/farmer/centres"
+          className="card"
+          style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>🏢 Find Best Centre</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>View live wait times and capacity across all centres</div>
+          </div>
+          <ChevronRight size={20} color="#16a34a" />
+        </Link>
+
+        <Link
+          to="/farmer/appointments"
+          className="card"
+          style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>📅 Book Storage Slot</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>Select date, storage square, and lock in your token</div>
+          </div>
+          <ChevronRight size={20} color="#16a34a" />
+        </Link>
+
+        <Link
+          to="/farmer/payments"
+          className="card"
+          style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>💳 DBT Payment Vouchers</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>Track state treasury payouts and bank receipts</div>
+          </div>
+          <ChevronRight size={20} color="#16a34a" />
+        </Link>
+      </div>
+
+      {/* ── RECENT BOOKINGS & PROCUREMENT HISTORY ───────────────── */}
+      <div className="card" style={{ padding: '1.5rem' }}>
+        <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: '0 0 1rem 0' }}>
+          My Procurement Records ({history.length})
+        </h3>
+        {history.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '0.9rem' }}>
+            No previous bookings found for your account. Click <strong>"Book Storage Slot"</strong> to schedule your first procurement.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0', textAlign: 'left', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '0.6rem' }}>Token</th>
+                  <th style={{ padding: '0.6rem' }}>Centre</th>
+                  <th style={{ padding: '0.6rem' }}>Date</th>
+                  <th style={{ padding: '0.6rem' }}>Crop</th>
+                  <th style={{ padding: '0.6rem' }}>Quantity</th>
+                  <th style={{ padding: '0.6rem' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map(item => (
+                  <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '0.65rem', fontWeight: 800, fontFamily: 'monospace', color: '#16a34a' }}>
+                      {item.token_number}
+                    </td>
+                    <td style={{ padding: '0.65rem', fontWeight: 600 }}>{item.centre_name || item.centre_id}</td>
+                    <td style={{ padding: '0.65rem', color: '#64748b' }}>{item.appointment_date || item.time_slot}</td>
+                    <td style={{ padding: '0.65rem' }}>{item.crop_type}</td>
+                    <td style={{ padding: '0.65rem', fontWeight: 700 }}>
+                      {(item.actual_weight_kg || item.declared_quantity_kg || item.quantity_kg || 0).toLocaleString()} kg
+                    </td>
+                    <td style={{ padding: '0.65rem' }}>
+                      <span style={{
+                        padding: '0.2rem 0.55rem', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 800,
+                        background: item.status === 'COMPLETED' ? '#dcfce7' : item.status === 'CALLED' ? '#fee2e2' : '#f1f5f9',
+                        color: item.status === 'COMPLETED' ? '#166534' : item.status === 'CALLED' ? '#991b1b' : '#475569'
+                      }}>
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

@@ -1,36 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Weight, CheckCircle2, AlertTriangle, ShieldCheck, MapPin, Sparkles, ChevronRight, Sprout, Smartphone, Warehouse, Zap } from 'lucide-react';
-import { fetchSlots } from '../services/api';
-import { supabase } from '../lib/supabase';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { Calendar, Clock, Weight, CheckCircle2, AlertTriangle, ShieldCheck, MapPin, Sparkles, ChevronRight, Sprout, Smartphone, Warehouse, Zap, ArrowRight } from 'lucide-react';
+import { fetchSlots, bookAppointmentAtomic } from '../services/api';
 import { socket } from '../services/socket';
 import FarmerBookingPositionGrid from '../components/Farmer/FarmerBookingPositionGrid';
-import PhoneWhatsappBookingWidget from '../components/Farmer/PhoneWhatsappBookingWidget';
 import ProductManagementModal from '../components/Farmer/ProductManagementModal';
 import RealtimePackageMonitorWidget from '../components/Farmer/RealtimePackageMonitorWidget';
 
 export default function FarmerAppointmentsPage({ centres = [] }) {
-  const defaultCentre = centres.find(c => c.id === 'centre-1') || centres[0] || {
-    id: 'centre-1',
-    name: 'Mandya Central Procurement Yard',
-    remaining_capacity_kg: 19000,
-    color_status: 'GREEN'
-  };
+  const { user, profile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  const [selectedCentreId, setSelectedCentreId] = useState(defaultCentre.id);
+  const queryCentreId = searchParams.get('centre_id');
+  const defaultCentre = (queryCentreId && centres.find(c => c.id === queryCentreId))
+    || centres.find(c => c.id === 'centre-1')
+    || centres[0]
+    || {
+      id: 'centre-1',
+      name: 'Mandya Central Procurement Yard',
+      remaining_capacity_kg: 19000,
+      color_status: 'GREEN'
+    };
+
+  const [selectedCentreId, setSelectedCentreId] = useState(queryCentreId || defaultCentre.id);
   const [crop, setCrop] = useState('Paddy (Sona Masoori)');
   const [quantity, setQuantity] = useState(2500);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  
+
   const [slots, setSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [loadingSlots, setLoadingSlots] = useState(true);
-  
+
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [quickBookingLoading, setQuickBookingLoading] = useState(false);
+  const [quickBookingSuccess, setQuickBookingSuccess] = useState(null);
+  const [quickBookingError, setQuickBookingError] = useState(null);
 
   // Live centre from socket (updates when officer changes capacity/status)
   const [liveCentres, setLiveCentres] = useState(centres);
   const centre = liveCentres.find(c => c.id === selectedCentreId) || defaultCentre;
-  const [centreAlert, setCentreAlert] = useState(null); // latest officer notification for this centre
+  const [centreAlert, setCentreAlert] = useState(null);
+
+  const activeFarmerId = user?.id || 'default-farmer';
+  const activeFarmerName = profile?.full_name || user?.full_name || 'Farmer';
+  const activeFarmerPhone = profile?.phone || user?.phone || '';
+
+  // Update selected centre if query param changes
+  useEffect(() => {
+    if (queryCentreId && queryCentreId !== selectedCentreId) {
+      setSelectedCentreId(queryCentreId);
+    }
+  }, [queryCentreId]);
 
   // Subscribe to realtime centre updates from officer dashboard
   useEffect(() => {
@@ -57,89 +79,157 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
     };
   }, [selectedCentreId]);
 
-  // Reset alert when centre changes
   useEffect(() => setCentreAlert(null), [selectedCentreId]);
 
-  // Fetch slots from Supabase / Backend API
-  const loadSlots = async () => {
+  // Fetch slots directly from MongoDB backend API
+  const loadSlots = async (isBackground = false) => {
     try {
-      setLoadingSlots(true);
-
-      // 1. Try Supabase query
-      const { data: supaSlots, error: supaErr } = await supabase
-        .from('slots')
-        .select('*')
-        .eq('centre_id', selectedCentreId)
-        .eq('slot_date', date);
-
-      if (!supaErr && supaSlots && supaSlots.length > 0) {
-        setSlots(supaSlots);
-        if (!selectedSlot || !supaSlots.find(s => s.id === selectedSlot.id)) {
-          setSelectedSlot(supaSlots.find(s => s.is_available) || supaSlots[0]);
-        }
-        setLoadingSlots(false);
-        return;
-      }
-
-      // 2. Fallback Express backend API
+      if (!isBackground) setLoadingSlots(true);
       const res = await fetchSlots(selectedCentreId, date);
-      if (res.success && res.slots) {
+      if (res.success && res.slots && res.slots.length > 0) {
         setSlots(res.slots);
-        if (!selectedSlot || !res.slots.find(s => s.id === selectedSlot.id)) {
-          setSelectedSlot(res.slots.find(s => s.is_available) || res.slots[0]);
-        }
-      } else {
-        const mockSlots = [
-          { id: `slot-${selectedCentreId}-0830`, start_time: '08:30 - 09:00 AM', maximum_bookings: 20, current_bookings: 8, is_available: true },
-          { id: `slot-${selectedCentreId}-0900`, start_time: '09:00 - 09:30 AM', maximum_bookings: 20, current_bookings: 14, is_available: true },
-          { id: `slot-${selectedCentreId}-1000`, start_time: '10:00 - 10:30 AM', maximum_bookings: 20, current_bookings: 19, is_available: true },
-          { id: `slot-${selectedCentreId}-1100`, start_time: '11:00 - 11:30 AM', maximum_bookings: 20, current_bookings: 20, is_available: false }
-        ];
-        setSlots(mockSlots);
-        setSelectedSlot(mockSlots[2]);
+        setSelectedSlot(prev => {
+          if (!prev) return res.slots.find(s => s.is_available) || res.slots[0];
+          return res.slots.find(s => s.id === prev.id) || prev;
+        });
       }
     } catch (e) {
       console.error('Error fetching slots:', e);
     } finally {
-      setLoadingSlots(false);
+      if (!isBackground) setLoadingSlots(false);
     }
   };
 
   useEffect(() => {
-    loadSlots();
+    loadSlots(false);
+
+    const onLiveSlots = () => loadSlots(true);
+    socket.on('slots_updated', onLiveSlots);
+    socket.on('slot_position_updated', onLiveSlots);
+    socket.on('appointment_booked', onLiveSlots);
+
+    const pollTimer = setInterval(() => loadSlots(true), 3000);
+
+    return () => {
+      socket.off('slots_updated', onLiveSlots);
+      socket.off('slot_position_updated', onLiveSlots);
+      socket.off('appointment_booked', onLiveSlots);
+      clearInterval(pollTimer);
+    };
   }, [selectedCentreId, date]);
 
-  return (
-    <div style={{ maxWidth: '980px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+  // Quick 1-click slot booking
+  const handleQuickBook = async () => {
+    setQuickBookingLoading(true);
+    setQuickBookingError(null);
+    setQuickBookingSuccess(null);
 
-      {/* ── LIVE CENTRE STATUS ALERT (from officer updates) ── */}
+    try {
+      const res = await bookAppointmentAtomic({
+        farmer_id: activeFarmerId,
+        farmer_name: activeFarmerName,
+        farmer_phone: activeFarmerPhone,
+        centre_id: selectedCentreId,
+        appointment_date: date,
+        time_slot: selectedSlot?.start_time || '09:00 AM',
+        quantity_kg: Number(quantity),
+        crop
+      });
+
+      if (!res.success) {
+        setQuickBookingError(res.error || 'Failed to book slot.');
+      } else {
+        setQuickBookingSuccess({
+          token: res.token_number,
+          centreName: centre.name,
+          appointment: res.appointment
+        });
+        loadSlots();
+      }
+    } catch (err) {
+      setQuickBookingError(err.message || 'Error booking appointment.');
+    } finally {
+      setQuickBookingLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '980px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '0 0.5rem' }}>
+
+      {/* ── BOOKING CONFIRMATION SUCCESS MODAL ── */}
+      {quickBookingSuccess && (
+        <div className="modal-overlay" style={{ background: 'rgba(15, 23, 42, 0.75)', zIndex: 9999 }}>
+          <div className="modal-content" style={{ maxWidth: '480px', textAlign: 'center', padding: '2rem', borderRadius: '16px', border: '2px solid #16a34a' }}>
+            <div style={{ background: '#dcfce7', color: '#16a34a', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem auto' }}>
+              <CheckCircle2 size={36} />
+            </div>
+            <span style={{ background: '#f0fdf4', color: '#166534', padding: '0.25rem 0.75rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 800 }}>
+              SLOT BOOKING CONFIRMED
+            </span>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 900, color: '#0f172a', margin: '0.75rem 0 0.25rem 0' }}>
+              Token: {quickBookingSuccess.token}
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '1.5rem' }}>
+              Your appointment is booked at <strong>{quickBookingSuccess.centreName}</strong>. You are now in the live queue!
+            </p>
+
+            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', textAlign: 'left', fontSize: '0.85rem', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <span style={{ color: '#64748b' }}>Farmer:</span>
+                <strong>{activeFarmerName}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <span style={{ color: '#64748b' }}>Crop & Quantity:</span>
+                <strong>{crop} ({Number(quantity).toLocaleString()} kg)</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Status:</span>
+                <span style={{ color: '#16a34a', fontWeight: 800 }}>WAITING IN QUEUE</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => navigate('/farmer/queue')}
+                className="btn btn-primary"
+                style={{ flex: 1, padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontWeight: 800 }}
+              >
+                Go to Live Queue Counter <ArrowRight size={16} />
+              </button>
+              <button
+                onClick={() => setQuickBookingSuccess(null)}
+                className="btn btn-secondary"
+                style={{ padding: '0.75rem' }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LIVE CENTRE STATUS ALERT ── */}
       {centreAlert && (
         <div style={{
-          background: centreAlert.type === 'CENTRE_UPDATE' &&
-            (centreAlert.title?.toLowerCase().includes('closed') || centreAlert.message?.toLowerCase().includes('closed'))
-            ? '#fef2f2' : '#f0fdf4',
+          background: centreAlert.message?.toLowerCase().includes('closed') ? '#fef2f2' : '#f0fdf4',
           border: '1.5px solid',
           borderColor: centreAlert.message?.toLowerCase().includes('closed') ? '#fca5a5' : '#86efac',
           borderRadius: '12px',
           padding: '1rem 1.25rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.75rem',
-          animation: 'pulse 2s ease-in-out'
+          gap: '0.75rem'
         }}>
           <span style={{ fontSize: '1.5rem' }}>{centreAlert.icon || '🏢'}</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>Centre Update: {centreAlert.title}</div>
             <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.15rem' }}>{centreAlert.message}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.7rem', color: '#16a34a', fontWeight: 700 }}>
-            <Zap size={12} /> LIVE
-          </div>
           <button onClick={() => setCentreAlert(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.1rem' }}>✕</button>
         </div>
       )}
 
-      {/* ── CENTRE STATUS BADGE (always visible, updates live) ── */}
+      {/* ── CENTRE STATUS BADGE ── */}
       {centre && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap',
@@ -155,7 +245,7 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
             {centre.status === 'OPEN' ? '🟢 OPEN' : centre.status === 'HIGH_LOAD' ? '🟡 HIGH LOAD' : centre.status === 'FULL' ? '🔴 FULL' : centre.status || 'OPEN'}
           </span>
           <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Capacity: <strong>{(centre.daily_capacity_kg || 0).toLocaleString()} kg</strong></span>
-          <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 700 }}>Remaining: {(centre.remaining_capacity_kg || 0).toLocaleString()} kg</span>
+          <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 700 }}>Remaining: {(centre.remaining_capacity_kg || (centre.daily_capacity_kg - (centre.booked_capacity_kg || 0)) || 0).toLocaleString()} kg</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', color: '#16a34a', fontWeight: 800, marginLeft: 'auto' }}>
             <Zap size={10} /> LIVE
           </span>
@@ -167,21 +257,24 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <span style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              📍 WAREHOUSE STORAGE AREA GRID (WEB DIRECT + WHATSAPP & PHONE HOTLINE)
+              📍 WAREHOUSE STORAGE AREA GRID & INSTANT APPOINTMENT
             </span>
             <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0.25rem 0 0 0', fontFamily: 'Outfit, sans-serif', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Warehouse size={28} color="#4ade80" /> Storage Area Booking System
             </h1>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '0.2rem 0 0 0' }}>
-              Book by <strong>clicking an open Storage Square on the web</strong> OR use <strong>WhatsApp & Telephone hotline</strong>. 1 Square = 1 Storage Unit (50kg).
+              Booking for: <strong>{activeFarmerName}</strong> (ID: {activeFarmerId})
             </p>
           </div>
 
-          <div style={{ background: 'rgba(22, 163, 74, 0.2)', border: '1px solid #22c55e', padding: '0.5rem 1rem', borderRadius: '10px', textAlign: 'right' }}>
-            <div style={{ fontSize: '0.7rem', color: '#86efac', fontWeight: 700 }}>BOOKING CHANNELS</div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Smartphone size={16} color="#4ade80" /> Web Direct • WhatsApp • IVR
-            </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => navigate('/farmer/centres')}
+              className="btn btn-secondary btn-sm"
+              style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none' }}
+            >
+              🏢 Compare Other Centres
+            </button>
           </div>
         </div>
       </div>
@@ -214,7 +307,7 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
             >
               {centres.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.district || 'Mandya'})
+                  {c.name} ({c.district || 'Mandya'}) - Prefix: {c.token_prefix || 'A'}
                 </option>
               ))}
             </select>
@@ -348,15 +441,43 @@ export default function FarmerAppointmentsPage({ centres = [] }) {
             })}
           </div>
         )}
+
+        {/* Quick 1-Click Booking Option */}
+        {selectedSlot && (
+          <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: '12px', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ fontWeight: 800, color: '#166534', fontSize: '0.95rem' }}>
+                ⚡ Fast Slot Booking for {selectedSlot.start_time}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#15803d' }}>
+                Skip square selection — automatically lock in next available spot and issue token immediately.
+              </div>
+              {quickBookingError && (
+                <div style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '0.3rem', fontWeight: 700 }}>
+                  ⚠️ {quickBookingError}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleQuickBook}
+              disabled={quickBookingLoading}
+              className="btn btn-primary"
+              style={{ padding: '0.65rem 1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              {quickBookingLoading ? 'Booking Slot...' : 'Instant Slot Book'} <ArrowRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* 3. Storage Bay Area Grid of Squares & WhatsApp / Phone Hotline Simulator */}
+      {/* 3. Storage Bay Area Grid of Squares */}
       {selectedSlot && (
         <FarmerBookingPositionGrid
           slot={selectedSlot}
           centre={centre}
-          farmerId="F-1042"
-          farmerName="Ramesh Gowda"
+          farmerId={activeFarmerId}
+          farmerName={activeFarmerName}
           crop={crop}
           quantityKg={quantity}
           onBookingSuccess={() => {
