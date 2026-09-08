@@ -45,7 +45,6 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import { Sprout, LogOut, User, MapPin, Calendar, Clock, CreditCard, ShieldCheck, Zap, Globe, Activity, Bell, RefreshCw, Menu, X, BarChart3, FileSpreadsheet, FileText } from 'lucide-react';
 import NotificationBellDropdown from './components/NotificationBellDropdown';
-import OneSignalVerificationDialog from './components/OneSignalVerificationDialog';
 
 function NavigationBar({ onOpenDemoModal }) {
   const { user, profile, role, signOut } = useAuth();
@@ -878,8 +877,6 @@ function MainAppContent() {
         />
       )}
 
-      {/* OneSignal Verification Dialog */}
-      <OneSignalVerificationDialog />
     </div>
   );
 }

@@ -42,6 +42,4 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // OneSignal Android SDK (v5.x per OneSignal AI Prompt Guidelines)
-    implementation("com.onesignal:OneSignal:[5.0.0, 5.99.99]")
 }

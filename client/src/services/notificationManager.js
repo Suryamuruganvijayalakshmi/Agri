@@ -162,90 +162,6 @@ if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     });
 }
 
-// ─── Median & OneSignal User Identity Mapping ───────────────────
-
-export function registerOneSignalUser(farmerId) {
-    if (!farmerId || typeof window === 'undefined') return;
-    const strId = String(farmerId);
-
-    // 1. Median.co (GoNative) Android App OneSignal Integration
-    try {
-        if (window.median && window.median.onesignal) {
-            if (typeof window.median.onesignal.login === 'function') {
-                window.median.onesignal.login({ externalId: strId });
-            } else if (typeof window.median.onesignal.setExternalUserId === 'function') {
-                window.median.onesignal.setExternalUserId({ externalUserId: strId });
-            }
-            if (window.median.onesignal.tags && typeof window.median.onesignal.tags.setTags === 'function') {
-                window.median.onesignal.tags.setTags({ tags: { farmerId: strId, role: 'FARMER' } });
-            }
-            console.log('📱 [Median OneSignal] External ID registered for Android push:', strId);
-        } else if (window.gonative && window.gonative.onesignal) {
-            if (typeof window.gonative.onesignal.setExternalUserId === 'function') {
-                window.gonative.onesignal.setExternalUserId({ externalUserId: strId });
-            }
-            console.log('📱 [GoNative OneSignal] External ID registered:', strId);
-        }
-    } catch (medianErr) {
-        console.warn('⚠️ [Median OneSignal] Bridge call warning:', medianErr);
-    }
-
-    // 2. OneSignal Web / PWA SDK Integration
-    try {
-        if (window.OneSignalDeferred) {
-            window.OneSignalDeferred.push(async function(OneSignal) {
-                try {
-                    if (typeof OneSignal.login === 'function') {
-                        await OneSignal.login(strId);
-                    } else if (typeof OneSignal.setExternalUserId === 'function') {
-                        await OneSignal.setExternalUserId(strId);
-                    }
-                    if (OneSignal.User && typeof OneSignal.User.addTag === 'function') {
-                        OneSignal.User.addTag('farmerId', strId);
-                    }
-                    console.log('⚡ [OneSignal Web SDK] User logged in with external_id:', strId);
-                } catch (e) {
-                    console.warn('⚠️ [OneSignal Web SDK] Login warning:', e.message);
-                }
-            });
-        }
-    } catch (webErr) {
-        console.warn('⚠️ [OneSignal Web] error:', webErr);
-    }
-}
-
-export function unregisterOneSignalUser() {
-    if (typeof window === 'undefined') return;
-
-    // 1. Median.co
-    try {
-        if (window.median && window.median.onesignal) {
-            if (typeof window.median.onesignal.logout === 'function') {
-                window.median.onesignal.logout();
-            } else if (typeof window.median.onesignal.removeExternalUserId === 'function') {
-                window.median.onesignal.removeExternalUserId();
-            }
-        } else if (window.gonative && window.gonative.onesignal && typeof window.gonative.onesignal.removeExternalUserId === 'function') {
-            window.gonative.onesignal.removeExternalUserId();
-        }
-    } catch (e) {}
-
-    // 2. OneSignal Web SDK
-    try {
-        if (window.OneSignalDeferred) {
-            window.OneSignalDeferred.push(async function(OneSignal) {
-                try {
-                    if (typeof OneSignal.logout === 'function') {
-                        await OneSignal.logout();
-                    } else if (typeof OneSignal.removeExternalUserId === 'function') {
-                        await OneSignal.removeExternalUserId();
-                    }
-                } catch (e) {}
-            });
-        }
-    } catch (e) {}
-}
-
 // ─── Permission Request ──────────────────────────────────────
 
 export function getNotificationPermission() {
@@ -262,25 +178,6 @@ export async function requestNotificationPermission() {
         const permission = await Notification.requestPermission();
 
         if (permission === 'granted') {
-            // Prompt OneSignal to register mobile push token
-            if (window.OneSignalDeferred) {
-                window.OneSignalDeferred.push(async function(OneSignal) {
-                    try {
-                        await OneSignal.Notifications.requestPermission();
-                    } catch (e) {}
-                });
-            }
-
-            // If farmer user ID exists in storage, link it
-            const savedUserStr = localStorage.getItem('agriflow_user');
-            if (savedUserStr) {
-                try {
-                    const u = JSON.parse(savedUserStr);
-                    const fid = u.id || u._id || u.farmer_id || u.email;
-                    if (fid) registerOneSignalUser(fid);
-                } catch (e) {}
-            }
-
             // Immediately subscribe to real background push
             const sub = await subscribeToRealWebPush();
 

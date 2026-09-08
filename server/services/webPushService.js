@@ -7,8 +7,10 @@ import { PushSubscription } from '../models/PushSubscription.js';
 
 // This module reads VAPID settings during initialization. Load .env here because
 // ESM imports execute before server.js can call dotenv.config().
-dotenv.config({ path: fileURLToPath(new URL('../.env',
-        import.meta.url)) });
+dotenv.config({
+    path: fileURLToPath(new URL('../.env',
+        import.meta.url))
+});
 
 let VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 let VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
@@ -35,84 +37,6 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
     } catch (err) {
         console.error('❌ [Web Push] VAPID initialization FAILED:', err.message);
     }
-}
-
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || '67abcb09-7a13-4c19-85d3-223a44d887c0';
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
-
-export function getOneSignalAppId() {
-    return ONESIGNAL_APP_ID;
-}
-
-export async function sendOneSignalPush(title, message, options = {}) {
-    const appId = process.env.ONESIGNAL_APP_ID || ONESIGNAL_APP_ID;
-    const apiKey = process.env.ONESIGNAL_REST_API_KEY || ONESIGNAL_REST_API_KEY;
-
-    if (!appId) {
-        console.warn('⚠️ [OneSignal Push] Aborted: ONESIGNAL_APP_ID not configured.');
-        return { success: false, reason: 'ONESIGNAL_APP_ID not configured' };
-    }
-
-    const targetFarmerId = options.farmerId || options.targetFarmerId || options.userId;
-
-    try {
-        const payload = {
-            app_id: appId,
-            headings: { en: title || 'AGRIFlow Alert' },
-            contents: { en: message || 'Operational Update' },
-            url: options.url || '/',
-            data: {
-                farmerId: targetFarmerId ? String(targetFarmerId) : 'ALL',
-                notificationId: options.notificationId || options.id || null,
-                type: options.type || 'NOTIFICATION',
-                ...(options.data || {})
-            }
-        };
-
-        // Target ONLY the specific farmer associated with the event
-        if (targetFarmerId && targetFarmerId !== 'ALL') {
-            const strFarmerId = String(targetFarmerId);
-            // OneSignal v5 aliases + legacy external user IDs
-            payload.include_aliases = { external_id: [strFarmerId] };
-            payload.include_external_user_ids = [strFarmerId];
-            payload.target_channel = 'push';
-        } else {
-            payload.included_segments = ['Subscribed Users', 'Total Subscriptions'];
-        }
-
-        if (!apiKey) {
-            console.log(`ℹ️ [OneSignal Push] Notification recorded in MongoDB. OneSignal push skipped: ONESIGNAL_REST_API_KEY is not set in .env (Add it to deliver native mobile push to farmer ${targetFarmerId || 'ALL'}).`);
-            return { success: false, reason: 'ONESIGNAL_REST_API_KEY missing' };
-        }
-
-        const headers = {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Authorization': `Basic ${apiKey}`
-        };
-
-        const response = await fetch('https://onesignal.com/api/v1/notifications', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-
-        if (result.errors) {
-            console.warn(`⚠️ [OneSignal Push] Delivery warning for farmer [${targetFarmerId || 'ALL'}]:`, result.errors);
-        } else {
-            console.log(`⚡ [OneSignal Push] Successfully delivered push to farmer [${targetFarmerId || 'ALL'}]. ID: ${result.id}`);
-        }
-        return result;
-    } catch (err) {
-        console.warn(`⚠️ [OneSignal Push] Network or API error for farmer [${targetFarmerId || 'ALL'}]:`, err.message);
-        return { success: false, error: err.message };
-    }
-}
-
-// Target a specific farmer by their farmerId / externalId
-export async function sendOneSignalPushToFarmer(farmerId, title, message, options = {}) {
-    return sendOneSignalPush(title, message, {...options, farmerId });
 }
 
 export function getVapidPublicKey() {
@@ -162,9 +86,6 @@ async function sendToOne(sub, payload) {
 
 // Broadcast real push to ALL subscribed devices (works with phone locked / site closed!)
 export async function broadcastPushNotification(title, message, options = {}) {
-    // Dispatch via OneSignal for mobile lock screens and native push
-    sendOneSignalPush(title, message, options).catch(() => {});
-
     if (!vapidReady) {
         console.warn('[Web Push] Broadcast skipped — VAPID not configured. Add keys to .env');
         return { sent: 0, failed: 0, error: 'VAPID not configured' };

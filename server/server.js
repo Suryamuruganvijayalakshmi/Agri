@@ -12,7 +12,7 @@ import { Farmer } from './models/Farmer.js';
 import { Notification } from './models/Notification.js';
 import { sendBookingConfirmationEmail, sendAgentBookingNotification } from './services/emailService.js';
 import { getSimulatedSMSLog, getSMSProviderInfo } from './services/smsService.js';
-import { getVapidPublicKey, isVapidReady, savePushSubscription, broadcastPushNotification, sendPushToUser, sendOneSignalPush } from './services/webPushService.js';
+import { getVapidPublicKey, isVapidReady, savePushSubscription, broadcastPushNotification, sendPushToUser } from './services/webPushService.js';
 
 dotenv.config();
 
@@ -94,20 +94,6 @@ const broadcastRealtimeUpdate = async(eventType, payload) => {
         if (eventType === 'notification_pushed') {
             const targetFarmerId = (payload && payload.farmerId) || (payload && payload.farmer_id);
             if (targetFarmerId && targetFarmerId !== 'ALL') {
-                // Target ONLY this farmer via OneSignal REST API (Median Android app + Web)
-                sendOneSignalPush((payload && payload.title) || 'AGRIFlow Notification', (payload && payload.message) || 'New update received', {
-                    farmerId: targetFarmerId,
-                    url: (payload && payload.link) || '/farmer/queue',
-                    notificationId: payload && payload.id,
-                    type: payload && payload.type,
-                    data: {
-                        id: payload && payload.id,
-                        farmerId: targetFarmerId,
-                        type: payload && payload.type,
-                        relatedId: (payload && payload.relatedId) || null
-                    }
-                }).catch(err => console.warn(`[OneSignal Error for farmer ${targetFarmerId}]:`, err.message));
-
                 // VAPID Web push to specific farmer
                 sendPushToUser(targetFarmerId, (payload && payload.title) || 'AGRIFlow Notification', (payload && payload.message) || '', {
                     url: (payload && payload.link) || '/farmer/queue'
