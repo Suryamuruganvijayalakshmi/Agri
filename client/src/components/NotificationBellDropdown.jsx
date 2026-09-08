@@ -44,6 +44,7 @@ export default function NotificationBellDropdown() {
   const [loading, setLoading] = useState(false);
   const [permission, setPermission] = useState(() => getNotificationPermission());
   const dropdownRef = useRef(null);
+  const knownNotificationIds = useRef(new Set());
 
   const farmerId = user?.id || user?._id || user?.farmer_id;
 
@@ -67,15 +68,29 @@ export default function NotificationBellDropdown() {
   }, []);
 
   // Fetch notifications
-  const loadNotifications = useCallback(async () => {
+  const loadNotifications = useCallback(async (notifyNew = false) => {
     if (!farmerId) return;
     try {
       setLoading(true);
       const res = await fetch(`/api/notifications?farmerId=${farmerId}`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) {
-        setNotifications(data.notifications || []);
-        setUnreadCount((data.notifications || []).filter(n => !n.read).length);
+        const nextNotifications = data.notifications || [];
+        const newNotifications = notifyNew
+          ? nextNotifications.filter(n => n.id && !knownNotificationIds.current.has(n.id))
+          : [];
+        knownNotificationIds.current = new Set(nextNotifications.map(n => n.id).filter(Boolean));
+        setNotifications(nextNotifications);
+        setUnreadCount(nextNotifications.filter(n => !n.read).length);
+        newNotifications.forEach((notif) => {
+          triggerPushNotification(
+            notif.title || 'AGRIFlow Notification',
+            notif.message || 'You have an operational update.',
+            notif.icon || '🔔',
+            notif.type || 'info',
+            notif.link || notif.url || '/farmer/notifications'
+          );
+        });
       }
     } catch (e) {
       console.warn('NotificationBell: fetch error', e.message);
@@ -98,12 +113,13 @@ export default function NotificationBellDropdown() {
   useEffect(() => {
     if (role !== 'FARMER' || !farmerId) return;
 
-    fetchUnreadCount();
+    loadNotifications(false);
 
     const handleNewNotif = (notif) => {
       // Only care about notifications for this farmer or ALL
       const nFarmer = notif.farmerId || notif.farmer_id;
-      if (nFarmer && nFarmer !== farmerId && nFarmer !== 'ALL') return;
+      if (nFarmer && String(nFarmer) !== String(farmerId) && nFarmer !== 'ALL') return;
+      if (notif.id) knownNotificationIds.current.add(notif.id);
       setUnreadCount(c => c + 1);
       // If dropdown is open, prepend the notification
       setNotifications(prev => {
@@ -132,8 +148,9 @@ export default function NotificationBellDropdown() {
     socket.on('centre_notification', handleNewNotif);
     socket.on('notifications_updated', handleUpdated);
 
-    // Fallback polling every 30s
-    const poll = setInterval(fetchUnreadCount, 30000);
+    // Poll full records so notifications still arrive when Socket.IO is delayed
+    // or unavailable. The first load only seeds the ID set; later loads notify.
+    const poll = setInterval(() => loadNotifications(true), 10000);
 
     return () => {
       socket.off('notification_pushed', handleNewNotif);
@@ -141,7 +158,7 @@ export default function NotificationBellDropdown() {
       socket.off('notifications_updated', handleUpdated);
       clearInterval(poll);
     };
-  }, [role, farmerId, fetchUnreadCount, open, loadNotifications]);
+  }, [role, farmerId, loadNotifications]);
 
   // Load full list and refresh permission when dropdown opens
   useEffect(() => {
