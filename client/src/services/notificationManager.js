@@ -20,8 +20,15 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 function getUserInfo() {
+  let userId = localStorage.getItem('agriflow_user_id') || localStorage.getItem('userId');
+  if (!userId || userId === 'anonymous') {
+    try {
+      const u = JSON.parse(localStorage.getItem('agriflow_user') || '{}');
+      userId = u.id || u._id || u.farmer_id || u.email;
+    } catch {}
+  }
   return {
-    userId: localStorage.getItem('agriflow_user_id') || localStorage.getItem('userId') || 'anonymous',
+    userId: userId || 'anonymous',
     role: localStorage.getItem('agriflow_role') || localStorage.getItem('userRole') || 'FARMER'
   };
 }
@@ -268,33 +275,86 @@ export async function requestNotificationPermission() {
   }
 }
 
-// ─── Show Notification via Service Worker (appears on lockscreen!) ──────
+// ─── Show Notification on PC Desktop (Windows/Mac) & Mobile (Android) ──────
 
-export async function showServiceWorkerNotification(title, body, options = {}) {
-  const reg = swRegistration || (await navigator.serviceWorker.ready.catch(() => null));
-  if (!reg) return;
+export async function showOSNotification(title, body, options = {}) {
+  if (typeof window === 'undefined') return;
 
+  // Verify permission
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    console.log('[AGRIFlow Push] Cannot show OS notification: Notification.permission =', typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
+    return;
+  }
+
+  const cleanTitle = title || 'AGRIFlow Alert';
+  const cleanBody = body || options.message || 'You have an operational update.';
   const notifOptions = {
-    body,
-    icon: '/favicon.ico',
+    body: cleanBody,
+    icon: options.icon || '/favicon.ico',
     badge: '/favicon.ico',
     tag: options.tag || `agriflow-${Date.now()}`,
     vibrate: [300, 100, 300, 100, 400],
-    requireInteraction: options.requireInteraction !== false, // keep on lockscreen
+    requireInteraction: options.requireInteraction !== false, // keep on lockscreen/tray
     renotify: true,
     silent: false,
-    data: { url: options.url || '/' }
+    data: { url: options.url || options.link || '/' }
   };
 
-  try {
-    await reg.showNotification(title, notifOptions);
-  } catch (err) {
-    // Fallback to Notification API if SW notification fails
-    if (Notification.permission === 'granted') {
-      try { new Notification(title, { body, icon: '/favicon.ico', tag: notifOptions.tag }); } catch {}
+  let shown = false;
+
+  // 1. Android Mobile Chrome & Service Worker
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = swRegistration || (await navigator.serviceWorker.ready.catch(() => null)) || (await navigator.serviceWorker.getRegistration().catch(() => null));
+      if (reg && typeof reg.showNotification === 'function') {
+        await reg.showNotification(cleanTitle, notifOptions);
+        shown = true;
+      }
+    } catch (swErr) {
+      console.warn('[AGRIFlow Push] SW showNotification warning:', swErr);
     }
   }
+
+  // 2. Desktop PC (Windows / Mac / Linux browsers)
+  // On Windows PC Chrome/Edge/Firefox, window.Notification produces the native Action Center desktop banner
+  try {
+    const n = new window.Notification(cleanTitle, {
+      body: notifOptions.body,
+      icon: notifOptions.icon,
+      tag: notifOptions.tag,
+      requireInteraction: notifOptions.requireInteraction,
+      data: notifOptions.data
+    });
+    n.onclick = (e) => {
+      try {
+        e.preventDefault();
+        window.focus();
+        const target = notifOptions.data?.url;
+        if (target && target !== '#') {
+          window.location.href = target;
+        }
+        n.close();
+      } catch {}
+    };
+    shown = true;
+  } catch (desktopErr) {
+    // Expected on Android Chrome where new Notification() constructor is disabled
+  }
+
+  // 3. Inform service worker controller if active
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+    try {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SHOW_NOTIFICATION',
+        title: cleanTitle,
+        options: notifOptions
+      });
+    } catch {}
+  }
 }
+
+// Retain backwards-compatible export name
+export const showServiceWorkerNotification = showOSNotification;
 
 // ─── Audio Chime ─────────────────────────────────────────────
 
@@ -332,13 +392,41 @@ export async function triggerPushNotification(title, message, icon = '🌾', typ
     }));
   }
 
-  // 3. Native lockscreen notification via Service Worker
-  if (Notification.permission === 'granted') {
-    await showServiceWorkerNotification(
-      `${icon} ${title}`,
+  // 3. Native OS notification on PC Desktop (Windows/Mac) & Mobile (Android)
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+    const fullTitle = icon ? `${icon} ${title}` : title;
+    await showOSNotification(
+      fullTitle,
       message,
       { tag: `agriflow-${Date.now()}`, url: targetUrl }
     );
+  }
+}
+
+// ─── Direct One-Click Test for OS Desktop & Mobile Alerts ────
+
+export async function sendTestOSNotification() {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    alert('Browser notifications are not supported in this browser.');
+    return;
+  }
+
+  let perm = Notification.permission;
+  if (perm !== 'granted') {
+    perm = await requestNotificationPermission();
+  }
+
+  if (perm === 'granted') {
+    playNotificationSound();
+    await triggerPushNotification(
+      'AGRIFlow Live Alert Test',
+      'Success! Real push notifications are now active on your PC and mobile device.',
+      '🔔',
+      'success',
+      '/farmer/notifications'
+    );
+  } else {
+    alert('Notifications are blocked. Please click the lock/site settings icon in your browser address bar and set Notifications to "Allow".');
   }
 }
 
@@ -398,12 +486,17 @@ function setupSocketNotificationListeners() {
 
   socket.on('notification_pushed', (data) => {
     if (!data) return;
+    const currentUserId = getUserInfo().userId;
+    const target = data.farmerId || data.farmer_id;
+    if (target && currentUserId && currentUserId !== 'anonymous' && target !== currentUserId && target !== 'ALL') {
+      return;
+    }
     triggerPushNotification(
       data.title || 'AGRIFlow Alert',
       data.message || 'Operational update received.',
       data.icon || '🔔',
       data.type || 'info',
-      data.url || '/'
+      data.link || data.url || '/'
     );
   });
 

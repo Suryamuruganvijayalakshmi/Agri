@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, X } from 'lucide-react';
+import { Bell, Check, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { socket } from '../services/socket';
 import { useAuth } from '../context/AuthContext';
+import {
+  triggerPushNotification,
+  requestNotificationPermission,
+  getNotificationPermission,
+  sendTestOSNotification
+} from '../services/notificationManager';
 
 const TYPE_CONFIG = {
   SLOT_BOOKED:          { icon: '📅', color: '#16a34a', label: 'Slot Booked' },
@@ -36,6 +42,7 @@ export default function NotificationBellDropdown() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [permission, setPermission] = useState(() => getNotificationPermission());
   const dropdownRef = useRef(null);
 
   const farmerId = user?.id || user?._id || user?.farmer_id;
@@ -103,6 +110,14 @@ export default function NotificationBellDropdown() {
         if (prev.find(n => n.id === notif.id)) return prev;
         return [{ ...notif, read: false }, ...prev];
       });
+      // PUSH TO OS DESKTOP / MOBILE NOTIFICATION
+      triggerPushNotification(
+        notif.title || 'AGRIFlow Notification',
+        notif.message || 'You have an operational update.',
+        notif.icon || '🔔',
+        notif.type || 'info',
+        notif.link || notif.url || '/farmer/notifications'
+      );
     };
 
     const handleUpdated = (data) => {
@@ -128,10 +143,27 @@ export default function NotificationBellDropdown() {
     };
   }, [role, farmerId, fetchUnreadCount, open, loadNotifications]);
 
-  // Load full list when dropdown opens
+  // Load full list and refresh permission when dropdown opens
   useEffect(() => {
-    if (open && farmerId) loadNotifications();
+    if (open) {
+      setPermission(getNotificationPermission());
+      if (farmerId) loadNotifications();
+    }
   }, [open, farmerId, loadNotifications]);
+
+  const handleEnableAlerts = async (e) => {
+    if (e) e.stopPropagation();
+    const p = await requestNotificationPermission();
+    setPermission(p);
+    if (p === 'granted') {
+      sendTestOSNotification();
+    }
+  };
+
+  const handleTestAlert = (e) => {
+    if (e) e.stopPropagation();
+    sendTestOSNotification();
+  };
 
   // Mark one as read
   const markRead = async (nid, e) => {
@@ -265,6 +297,76 @@ export default function NotificationBellDropdown() {
               </button>
             </div>
           </div>
+
+          {/* OS Push Notification Status Banner */}
+          {permission !== 'granted' ? (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.2) 0%, rgba(30, 58, 138, 0.3) 100%)',
+              borderBottom: '1px solid rgba(2, 132, 199, 0.3)',
+              padding: '0.65rem 0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.6rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>🔔</span>
+                <div style={{ fontSize: '0.73rem', color: '#bae6fd', lineHeight: 1.25 }}>
+                  <span style={{ color: '#ffffff', fontWeight: 800, display: 'block' }}>PC & Phone Alerts OFF</span>
+                  Allow to get popups on lockscreen & desktop
+                </div>
+              </div>
+              <button
+                onClick={handleEnableAlerts}
+                style={{
+                  background: '#0284c7',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '0.35rem 0.65rem',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)'
+                }}
+              >
+                Enable Alerts
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              background: 'rgba(22, 163, 74, 0.1)',
+              borderBottom: '1px solid rgba(22, 163, 74, 0.2)',
+              padding: '0.4rem 0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '0.72rem',
+              color: '#86efac'
+            }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 600 }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+                PC & Mobile Push Active
+              </span>
+              <button
+                onClick={handleTestAlert}
+                style={{
+                  background: 'rgba(22, 163, 74, 0.2)',
+                  color: '#4ade80',
+                  border: '1px solid rgba(74, 222, 128, 0.3)',
+                  borderRadius: '4px',
+                  padding: '0.15rem 0.5rem',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+                title="Send a test notification to verify PC / mobile alert"
+              >
+                🔔 Test Alert
+              </button>
+            </div>
+          )}
 
           {/* Notifications List */}
           <div style={{

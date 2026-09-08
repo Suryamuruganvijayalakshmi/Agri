@@ -6,6 +6,12 @@ import {
   Bell, CheckCircle2, Clock, CreditCard, ShieldCheck,
   AlertTriangle, Building2, RefreshCw, Trash2, Check, X
 } from 'lucide-react';
+import {
+  triggerPushNotification,
+  requestNotificationPermission,
+  getNotificationPermission,
+  sendTestOSNotification
+} from '../services/notificationManager';
 
 const TYPE_CONFIG = {
   SLOT_BOOKED:          { icon: '📅', color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Slot Booked' },
@@ -39,6 +45,7 @@ export default function FarmerNotificationsPage() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [liveToast, setLiveToast] = useState(null);   // live popup
+  const [permission, setPermission] = useState(() => getNotificationPermission());
 
   // ── fetch from MongoDB ────────────────────────────────────────────────────
   const loadNotifications = useCallback(async () => {
@@ -58,6 +65,7 @@ export default function FarmerNotificationsPage() {
 
   useEffect(() => {
     loadNotifications();
+    setPermission(getNotificationPermission());
 
     // ── Socket: live notification_pushed from the pipeline ──────────
     const handleLiveNotif = (notif) => {
@@ -71,6 +79,15 @@ export default function FarmerNotificationsPage() {
       // Show a toast popup for 5s
       setLiveToast(notif);
       setTimeout(() => setLiveToast(null), 5000);
+
+      // PUSH TO OS DESKTOP / MOBILE NOTIFICATION
+      triggerPushNotification(
+        notif.title || 'AGRIFlow Alert',
+        notif.message || 'You have an operational update.',
+        notif.icon || '🔔',
+        notif.type || 'info',
+        notif.link || notif.url || '/farmer/notifications'
+      );
     };
 
     const handleUpdated = (data) => {
@@ -197,6 +214,82 @@ export default function FarmerNotificationsPage() {
           {unreadCount > 0 && (
             <button onClick={markAllRead} className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Check size={14} /> Mark All Read ({unreadCount})
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Desktop & Mobile OS Notification Status Bar ── */}
+      <div style={{
+        background: permission === 'granted' ? 'rgba(22, 163, 74, 0.08)' : 'linear-gradient(135deg, rgba(2, 132, 199, 0.12) 0%, rgba(30, 58, 138, 0.15) 100%)',
+        border: permission === 'granted' ? '1px solid rgba(22, 163, 74, 0.3)' : '1px solid rgba(2, 132, 199, 0.4)',
+        borderRadius: '12px',
+        padding: '0.85rem 1.15rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '0.8rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <span style={{ fontSize: '1.4rem' }}>{permission === 'granted' ? '🟢' : '🔔'}</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#0f172a' }}>
+              {permission === 'granted' ? 'Real-Time Desktop & Mobile OS Alerts Active' : 'Enable PC Desktop & Mobile Phone Notifications'}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.1rem' }}>
+              {permission === 'granted'
+                ? 'Incoming website notifications will automatically pop up as system notifications on your PC and phone.'
+                : 'Allow notifications so gate queue tokens, weighment, and payments ring on your PC tray and mobile lockscreen.'}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {permission !== 'granted' ? (
+            <button
+              onClick={async () => {
+                const p = await requestNotificationPermission();
+                setPermission(p);
+                if (p === 'granted') {
+                  sendTestOSNotification();
+                }
+              }}
+              style={{
+                background: '#0284c7',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.45rem 0.9rem',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)'
+              }}
+            >
+              <Bell size={14} /> Enable Desktop & Phone Alerts
+            </button>
+          ) : (
+            <button
+              onClick={() => sendTestOSNotification()}
+              style={{
+                background: '#166534',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.45rem 0.9rem',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              🔔 Test Alert on Screen
             </button>
           )}
         </div>

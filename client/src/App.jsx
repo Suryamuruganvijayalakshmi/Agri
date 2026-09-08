@@ -37,7 +37,9 @@ import {
   initNotificationService,
   requestNotificationPermission,
   getNotificationPermission,
-  testLockscreenNotification
+  testLockscreenNotification,
+  triggerPushNotification,
+  sendTestOSNotification
 } from './services/notificationManager';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
@@ -78,6 +80,14 @@ function NavigationBar({ onOpenDemoModal }) {
     const handleNewNotif = (notif) => {
       if (notif.farmer_id && notif.farmer_id !== farmerId && notif.farmer_id !== 'ALL') return;
       setUnreadCount(c => c + 1);
+      // Trigger OS notification banner on PC Desktop and Mobile
+      triggerPushNotification(
+        notif.title || 'AGRIFlow Alert',
+        notif.message || 'You have a new update.',
+        notif.icon || '🔔',
+        notif.type || 'info',
+        notif.link || notif.url || '/farmer/notifications'
+      );
     };
     const handleUpdated = (data) => {
       if (data?.farmer_id === farmerId || data?.farmer_id === 'ALL') fetchCount();
@@ -124,6 +134,9 @@ function NavigationBar({ onOpenDemoModal }) {
               onClick={async () => {
                 const p = await requestNotificationPermission();
                 setNotifPermission(p);
+                if (p === 'granted') {
+                  sendTestOSNotification();
+                }
               }}
               style={{ background: '#0284c7', color: 'white', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
               title="Click to enable desktop & mobile lockscreen notifications"
@@ -137,6 +150,13 @@ function NavigationBar({ onOpenDemoModal }) {
               >
                 {t.alertsActive}
               </span>
+              <button
+                onClick={() => sendTestOSNotification()}
+                style={{ background: '#0284c7', color: 'white', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                title="Click to test immediate PC desktop / mobile notification"
+              >
+                🔔 Test OS Alert
+              </button>
               <button
                 onClick={() => testLockscreenNotification(4)}
                 style={{ background: '#7c3aed', color: 'white', border: 'none', padding: '0.2rem 0.55rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
