@@ -33,6 +33,11 @@ function getUserInfo() {
     };
 }
 
+function sameNotificationUser(first, second) {
+    if (!first || !second) return false;
+    return String(first) === String(second);
+}
+
 // ─── Service Worker Registration ────────────────────────────
 
 export async function initNotificationService() {
@@ -496,7 +501,7 @@ function setupSocketNotificationListeners() {
         if (!data) return;
         const currentUserId = getUserInfo().userId;
         const target = data.farmerId || data.farmer_id;
-        if (target && currentUserId && currentUserId !== 'anonymous' && target !== currentUserId && target !== 'ALL') {
+        if (target && currentUserId && currentUserId !== 'anonymous' && !sameNotificationUser(target, currentUserId) && target !== 'ALL') {
             return;
         }
         triggerPushNotification(

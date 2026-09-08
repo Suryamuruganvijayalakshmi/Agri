@@ -78,7 +78,8 @@ function NavigationBar({ onOpenDemoModal }) {
     fetchCount();
 
     const handleNewNotif = (notif) => {
-      if (notif.farmer_id && notif.farmer_id !== farmerId && notif.farmer_id !== 'ALL') return;
+      const targetFarmerId = notif.farmerId || notif.farmer_id;
+      if (targetFarmerId && String(targetFarmerId) !== String(farmerId) && targetFarmerId !== 'ALL') return;
       setUnreadCount(c => c + 1);
       // Trigger OS notification banner on PC Desktop and Mobile
       triggerPushNotification(

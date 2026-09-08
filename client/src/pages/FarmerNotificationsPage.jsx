@@ -70,7 +70,8 @@ export default function FarmerNotificationsPage() {
     // ── Socket: live notification_pushed from the pipeline ──────────
     const handleLiveNotif = (notif) => {
       // Only care about notifications for this farmer or ALL
-      if (notif.farmer_id && notif.farmer_id !== farmerId && notif.farmer_id !== 'ALL') return;
+      const targetFarmerId = notif.farmerId || notif.farmer_id;
+      if (targetFarmerId && String(targetFarmerId) !== String(farmerId) && targetFarmerId !== 'ALL') return;
       setNotifications(prev => {
         const exists = prev.find(n => n.id === notif.id);
         if (exists) return prev;
