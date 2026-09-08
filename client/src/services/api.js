@@ -52,7 +52,7 @@ export const fetchSlots = async(centreId, dateStr) => {
     const localDate = dateStr || getLocalDateStr();
     const now = new Date();
     const localTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const query = `?centre_id=${centreId}&date=${localDate}&client_date=${localDate}&client_time=${localTime}`;
+    const query = `?centre_id=${centreId}&date=${localDate}&client_date=${getLocalDateStr()}&client_time=${localTime}`;
     const res = await fetch(`${API_BASE}/slots${query}`);
     return res.json();
 };

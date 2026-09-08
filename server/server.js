@@ -607,7 +607,7 @@ app.get('/api/slots', async(req, res) => {
     try {
         const { centre_id, date, client_date, client_time } = req.query;
         if (!centre_id) return res.status(400).json({ success: false, error: 'centre_id is required' });
-        const slots = await db.getSlotsForCentre(centre_id, client_date || date, client_time);
+        const slots = await db.getSlotsForCentre(centre_id, date || client_date, client_time, client_date);
 
         // Determine the best recommended slot for real-time booking
         const currentSlot = slots.find(s => s.is_current && s.is_available);

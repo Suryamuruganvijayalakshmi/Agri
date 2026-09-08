@@ -1349,7 +1349,7 @@ class AgriFlowMongoDatabase {
     }
 
     // ── SLOTS WITH REAL-TIME DATE & TIME FETCHING ─────────
-    async getSlotsForCentre(centreId, dateStr, clientTimeStr) {
+    async getSlotsForCentre(centreId, dateStr, clientTimeStr, clientDateStr) {
         if (!this.isMongoConnected()) return [];
 
         // Compute current real-time date and time in local / IST
@@ -1449,7 +1449,7 @@ class AgriFlowMongoDatabase {
             return hr * 60 + mn;
         };
 
-        const comparisonDateStr = dateStr || serverTodayStr;
+        const comparisonDateStr = clientDateStr || serverTodayStr;
         const isTargetToday = targetDateStr === comparisonDateStr;
         const isTargetFuture = targetDateStr > comparisonDateStr;
         const isTargetPast = targetDateStr < comparisonDateStr;
