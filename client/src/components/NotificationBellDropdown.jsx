@@ -150,7 +150,7 @@ export default function NotificationBellDropdown() {
 
     // Poll full records so notifications still arrive when Socket.IO is delayed
     // or unavailable. The first load only seeds the ID set; later loads notify.
-    const poll = setInterval(() => loadNotifications(true), 10000);
+    const poll = setInterval(() => loadNotifications(true), 5000);
 
     return () => {
       socket.off('notification_pushed', handleNewNotif);
