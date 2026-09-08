@@ -12,7 +12,7 @@ import { Farmer } from './models/Farmer.js';
 import { Notification } from './models/Notification.js';
 import { sendBookingConfirmationEmail, sendAgentBookingNotification } from './services/emailService.js';
 import { getSimulatedSMSLog, getSMSProviderInfo } from './services/smsService.js';
-import { getVapidPublicKey, isVapidReady, savePushSubscription, broadcastPushNotification, sendPushToUser } from './services/webPushService.js';
+import { getVapidPublicKey, isVapidReady, savePushSubscription, broadcastPushNotification, sendPushToUser, sendOneSignalPush } from './services/webPushService.js';
 
 dotenv.config();
 
@@ -92,11 +92,34 @@ const broadcastRealtimeUpdate = async (eventType, payload) => {
   // Real Native Server Web Push (works when site/browser is closed & phone is locked)
   try {
     if (eventType === 'notification_pushed') {
-      await broadcastPushNotification(
-        payload?.title || 'AGRIFlow Procurement Alert',
-        payload?.message || 'New operational update received.',
-        { url: payload?.url || '/farmer/dashboard' }
-      );
+      const targetFarmerId = payload?.farmerId || payload?.farmer_id;
+      if (targetFarmerId && targetFarmerId !== 'ALL') {
+        // Target ONLY this farmer via OneSignal REST API (Median Android app + Web)
+        sendOneSignalPush(payload?.title || 'AGRIFlow Notification', payload?.message || 'New update received', {
+          farmerId: targetFarmerId,
+          url: payload?.link || '/farmer/queue',
+          notificationId: payload?.id,
+          type: payload?.type,
+          data: {
+            id: payload?.id,
+            farmerId: targetFarmerId,
+            type: payload?.type,
+            relatedId: payload?.relatedId || null
+          }
+        }).catch(err => console.warn(`[OneSignal Error for farmer ${targetFarmerId}]:`, err.message));
+
+        // VAPID Web push to specific farmer
+        sendPushToUser(targetFarmerId, payload?.title || 'AGRIFlow Notification', payload?.message || '', {
+          url: payload?.link || '/farmer/queue'
+        }).catch(() => {});
+      } else {
+        // Broadcast push if target is ALL
+        await broadcastPushNotification(
+          payload?.title || 'AGRIFlow Procurement Alert',
+          payload?.message || 'New operational update received.',
+          { url: payload?.link || payload?.url || '/farmer/dashboard' }
+        );
+      }
     } else if (eventType === 'appointment_booked') {
       const appt = payload?.appointment || payload;
       const token = payload?.token_number || appt?.token_number || 'New Slot';
@@ -1011,43 +1034,137 @@ app.post('/api/booking/position', async (req, res) => {
 // NOTIFICATIONS
 // ============================================================
 
+// Helper to resolve farmer identity safely from JWT auth token, headers, or query
+const resolveFarmerId = (req) => {
+  return req.user?.userId || req.headers['x-farmer-id'] || req.query.farmerId || req.query.farmer_id || null;
+};
+
+// 1. GET /api/notifications — Scoped to authenticated farmer
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const farmerId = resolveFarmerId(req);
+    if (!farmerId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Farmer authentication or identity required' });
+    }
+    const notifications = await Notification.find({
+      $or: [{ farmer_id: farmerId }, { farmerId: farmerId }, { farmer_id: 'ALL' }, { farmerId: 'ALL' }]
+    }).sort({ createdAt: -1 }).limit(60).lean();
+
+    res.json({ success: true, notifications });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. GET /api/notifications/unread-count — Scoped unread count
+app.get('/api/notifications/unread-count', async (req, res) => {
+  try {
+    const farmerId = resolveFarmerId(req);
+    if (!farmerId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Farmer authentication or identity required' });
+    }
+    const count = await Notification.countDocuments({
+      $or: [{ farmer_id: farmerId }, { farmerId: farmerId }, { farmer_id: 'ALL' }, { farmerId: 'ALL' }],
+      read: false
+    });
+    res.json({ success: true, count });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. Mark single notification as read handler
+const markNotificationAsRead = async (notifId, req, res) => {
+  try {
+    const notif = await Notification.findOne({
+      $or: [{ id: notifId }, { _id: notifId.match(/^[0-9a-fA-F]{24}$/) ? notifId : null }]
+    });
+    if (!notif) {
+      return res.status(404).json({ success: false, error: 'Notification not found' });
+    }
+
+    // Security check: if authenticated as farmer, ensure they own it
+    const reqFarmerId = resolveFarmerId(req);
+    if (reqFarmerId && notif.farmer_id !== 'ALL' && notif.farmerId !== 'ALL' && notif.farmer_id !== reqFarmerId && notif.farmerId !== reqFarmerId) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Cannot mark another farmer’s notification' });
+    }
+
+    notif.read = true;
+    await notif.save();
+    io.emit('notifications_updated', { farmer_id: notif.farmer_id || notif.farmerId });
+    res.json({ success: true, notification: notif });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// PATCH /api/notifications/:id/read
+app.patch('/api/notifications/:id/read', (req, res) => markNotificationAsRead(req.params.id, req, res));
+// POST /api/notifications/:id/read & POST /api/notifications/read/:notifId (backwards compatibility)
+app.post('/api/notifications/:id/read', (req, res) => markNotificationAsRead(req.params.id, req, res));
+app.post('/api/notifications/read/:notifId', (req, res) => markNotificationAsRead(req.params.notifId, req, res));
+
+// 4. Mark all notifications as read handler
+const markAllNotificationsAsRead = async (farmerIdParam, req, res) => {
+  try {
+    const farmerId = farmerIdParam || resolveFarmerId(req) || req.body?.farmerId || req.body?.farmer_id;
+    if (!farmerId) {
+      return res.status(400).json({ success: false, error: 'Farmer identity required' });
+    }
+    await Notification.updateMany(
+      { $or: [{ farmer_id: farmerId }, { farmerId: farmerId }, { farmer_id: 'ALL' }, { farmerId: 'ALL' }], read: false },
+      { $set: { read: true } }
+    );
+    io.emit('notifications_updated', { farmer_id: farmerId });
+    res.json({ success: true, message: 'All notifications marked as read' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// PATCH /api/notifications/read-all
+app.patch('/api/notifications/read-all', (req, res) => markAllNotificationsAsRead(null, req, res));
+// POST /api/notifications/read-all & POST /api/notifications/read-all/:farmerId (backwards compatibility)
+app.post('/api/notifications/read-all', (req, res) => markAllNotificationsAsRead(null, req, res));
+app.post('/api/notifications/read-all/:farmerId', (req, res) => markAllNotificationsAsRead(req.params.farmerId, req, res));
+
+// Legacy Parameterized GET endpoints (fully preserved)
 app.get('/api/notifications/:farmerId', async (req, res) => {
   try {
-    const notifications = await Notification.find({ $or: [{ farmer_id: req.params.farmerId }, { farmer_id: 'ALL' }] }).sort({ createdAt: -1 }).limit(60).lean();
+    const notifications = await Notification.find({
+      $or: [{ farmer_id: req.params.farmerId }, { farmerId: req.params.farmerId }, { farmer_id: 'ALL' }, { farmerId: 'ALL' }]
+    }).sort({ createdAt: -1 }).limit(60).lean();
     res.json({ success: true, notifications });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 app.get('/api/notifications/:farmerId/unread-count', async (req, res) => {
   try {
-    const count = await Notification.countDocuments({ $or: [{ farmer_id: req.params.farmerId }, { farmer_id: 'ALL' }], read: false });
+    const count = await Notification.countDocuments({
+      $or: [{ farmer_id: req.params.farmerId }, { farmerId: req.params.farmerId }, { farmer_id: 'ALL' }, { farmerId: 'ALL' }],
+      read: false
+    });
     res.json({ success: true, count });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
-});
-
-app.post('/api/notifications/read/:notifId', async (req, res) => {
-  try {
-    const notif = await Notification.findOne({ id: req.params.notifId });
-    if (notif) {
-      await Notification.updateOne({ id: req.params.notifId }, { $set: { read: true } });
-      io.emit('notifications_updated', { farmer_id: notif.farmer_id });
-    }
-    res.json({ success: true });
-  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
-});
-
-app.post('/api/notifications/read-all/:farmerId', async (req, res) => {
-  try {
-    await Notification.updateMany({ $or: [{ farmer_id: req.params.farmerId }, { farmer_id: 'ALL' }] }, { $set: { read: true } });
-    io.emit('notifications_updated', { farmer_id: req.params.farmerId });
-    res.json({ success: true });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
 app.post('/api/notifications', async (req, res) => {
   try {
-    const { farmer_id, centre_id, type, title, message, icon, link } = req.body;
-    const notif = await Notification.create({ id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 9999)}`, farmer_id, centre_id, type, title, message, icon: icon || '🔔', link });
+    const { farmer_id, farmerId, centre_id, type, title, message, icon, link, relatedId, metadata } = req.body;
+    const fId = farmerId || farmer_id;
+    const notif = await Notification.create({
+      id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
+      farmer_id: fId,
+      farmerId: fId,
+      centre_id,
+      type,
+      title,
+      message,
+      icon: icon || '🔔',
+      link,
+      relatedId: relatedId || null,
+      metadata: metadata || {}
+    });
     io.emit('centre_notification', { ...notif.toObject(), created_at: notif.createdAt });
     res.json({ success: true, notification: notif });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }

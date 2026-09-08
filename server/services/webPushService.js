@@ -38,33 +38,74 @@ export function getOneSignalAppId() {
 }
 
 export async function sendOneSignalPush(title, message, options = {}) {
-  if (!ONESIGNAL_APP_ID) return;
+  const appId = process.env.ONESIGNAL_APP_ID || ONESIGNAL_APP_ID;
+  const apiKey = process.env.ONESIGNAL_REST_API_KEY || ONESIGNAL_REST_API_KEY;
+
+  if (!appId) {
+    console.warn('⚠️ [OneSignal Push] Aborted: ONESIGNAL_APP_ID not configured.');
+    return { success: false, reason: 'ONESIGNAL_APP_ID not configured' };
+  }
+
+  const targetFarmerId = options.farmerId || options.targetFarmerId || options.userId;
+
   try {
     const payload = {
-      app_id: ONESIGNAL_APP_ID,
-      included_segments: ['Subscribed Users', 'Total Subscriptions'],
-      headings: { en: title || 'AGRIFlow Live Alert' },
+      app_id: appId,
+      headings: { en: title || 'AGRIFlow Alert' },
       contents: { en: message || 'Operational Update' },
       url: options.url || '/',
-      data: options.data || {}
+      data: {
+        farmerId: targetFarmerId ? String(targetFarmerId) : 'ALL',
+        notificationId: options.notificationId || options.id || null,
+        type: options.type || 'NOTIFICATION',
+        ...(options.data || {})
+      }
     };
 
-    const headers = { 'Content-Type': 'application/json; charset=utf-8' };
-    if (ONESIGNAL_REST_API_KEY) {
-      headers['Authorization'] = `Basic ${ONESIGNAL_REST_API_KEY}`;
+    // Target ONLY the specific farmer associated with the event
+    if (targetFarmerId && targetFarmerId !== 'ALL') {
+      const strFarmerId = String(targetFarmerId);
+      // OneSignal v5 aliases + legacy external user IDs
+      payload.include_aliases = { external_id: [strFarmerId] };
+      payload.include_external_user_ids = [strFarmerId];
+      payload.target_channel = 'push';
+    } else {
+      payload.included_segments = ['Subscribed Users', 'Total Subscriptions'];
     }
+
+    if (!apiKey) {
+      console.log(`ℹ️ [OneSignal Push] Notification recorded in MongoDB. OneSignal push skipped: ONESIGNAL_REST_API_KEY is not set in .env (Add it to deliver native mobile push to farmer ${targetFarmerId || 'ALL'}).`);
+      return { success: false, reason: 'ONESIGNAL_REST_API_KEY missing' };
+    }
+
+    const headers = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Authorization': `Basic ${apiKey}`
+    };
 
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
     });
+
     const result = await response.json();
-    console.log('⚡ [OneSignal Push] Broadcast result:', result);
+
+    if (result.errors) {
+      console.warn(`⚠️ [OneSignal Push] Delivery warning for farmer [${targetFarmerId || 'ALL'}]:`, result.errors);
+    } else {
+      console.log(`⚡ [OneSignal Push] Successfully delivered push to farmer [${targetFarmerId || 'ALL'}]. ID: ${result.id}`);
+    }
     return result;
   } catch (err) {
-    console.warn('⚠️ [OneSignal Push] Failed:', err.message);
+    console.warn(`⚠️ [OneSignal Push] Network or API error for farmer [${targetFarmerId || 'ALL'}]:`, err.message);
+    return { success: false, error: err.message };
   }
+}
+
+// Target a specific farmer by their farmerId / externalId
+export async function sendOneSignalPushToFarmer(farmerId, title, message, options = {}) {
+  return sendOneSignalPush(title, message, { ...options, farmerId });
 }
 
 export function getVapidPublicKey() {

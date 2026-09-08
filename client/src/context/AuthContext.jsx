@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { subscribeToRealWebPush } from '../services/notificationManager';
+import { subscribeToRealWebPush, registerOneSignalUser, unregisterOneSignalUser } from '../services/notificationManager';
 
 const AuthContext = createContext({});
 
@@ -34,6 +34,8 @@ export const AuthProvider = ({ children }) => {
         setUser(savedUser);
         setProfile(savedUser);
         setRole(savedUser.role || 'FARMER');
+        const fid = savedUser.id || savedUser._id || savedUser.farmer_id || savedUser.email;
+        if (fid) registerOneSignalUser(fid);
       } catch (e) {
         console.warn('Invalid saved session');
       }
@@ -45,6 +47,9 @@ export const AuthProvider = ({ children }) => {
   // so the server can target this specific user for real-time and lockscreen notifications
   async function afterAuthSuccess(u) {
     try {
+      const fid = u.id || u._id || u.farmer_id || u.email;
+      if (fid) registerOneSignalUser(fid);
+
       if (typeof window !== 'undefined' && 'Notification' in window) {
         if (Notification.permission === 'default') {
           const perm = await Notification.requestPermission();
@@ -155,6 +160,7 @@ export const AuthProvider = ({ children }) => {
   // Sign Out
   const signOut = async () => {
     setLoading(true);
+    unregisterOneSignalUser();
     clearSession();
     setUser(null);
     setProfile(null);

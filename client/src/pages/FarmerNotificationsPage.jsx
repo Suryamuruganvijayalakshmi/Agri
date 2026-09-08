@@ -92,16 +92,24 @@ export default function FarmerNotificationsPage() {
     };
   }, [farmerId, loadNotifications]);
 
+  const getHeaders = () => {
+    const token = localStorage.getItem('agriflow_token');
+    const h = { 'Content-Type': 'application/json' };
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    if (farmerId) h['x-farmer-id'] = farmerId;
+    return h;
+  };
+
   // ── mark one read ─────────────────────────────────────────────────────────
   const markRead = async (nid) => {
     setNotifications(prev => prev.map(n => n.id === nid ? { ...n, read: true } : n));
-    try { await fetch(`${API}/notifications/read/${nid}`, { method: 'POST' }); } catch {}
+    try { await fetch(`${API}/notifications/${nid}/read`, { method: 'PATCH', headers: getHeaders() }); } catch {}
   };
 
   // ── mark all read ─────────────────────────────────────────────────────────
   const markAllRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    try { await fetch(`${API}/notifications/read-all/${farmerId}`, { method: 'POST' }); } catch {}
+    try { await fetch(`${API}/notifications/read-all`, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ farmerId }) }); } catch {}
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;

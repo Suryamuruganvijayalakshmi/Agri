@@ -271,8 +271,17 @@ class AgriFlowMongoDatabase {
     });
 
     // Create notifications
-    await this.createNotification(farmer_id, centre_id, 'SLOT_BOOKED', 'Slot Booked',
-      `Token ${tokenNumber} confirmed for ${Number(quantity_kg || 0).toLocaleString()} kg ${crop_type || 'produce'}.`, '📅', '/farmer/queue');
+    await this.createNotification(
+      farmer_id,
+      centre_id,
+      'SLOT_BOOKED',
+      'Slot Booked',
+      `Token ${tokenNumber} confirmed for ${Number(quantity_kg || 0).toLocaleString()} kg ${crop_type || 'produce'}.`,
+      '📅',
+      '/farmer/queue',
+      apptId,
+      { appointmentId: apptId, tokenNumber, quantity_kg, crop: crop_type }
+    );
 
     // SMS notification (simulation mode by default)
     if (farmer_phone) {
@@ -467,11 +476,14 @@ class AgriFlowMongoDatabase {
     });
 
     // Notify the called farmer
+    const counterIndex = (await Appointment.countDocuments({ centre_id: centreId, status: { $in: ['CALLED', 'PROCESSING'] } })) || 1;
     await this.createNotification(
       nextFarmer.farmer_id, centreId,
       'TOKEN_CALLED', 'Token Called',
-      `Token ${nextFarmer.token_number} called. Proceed to Weighbridge Counter #${(await Appointment.countDocuments({ centre_id: centreId, status: { $in: ['CALLED', 'PROCESSING'] } })) || 1}.`,
-      '📢', '/farmer/queue'
+      `Token ${nextFarmer.token_number} called. Proceed to Weighbridge Counter #${counterIndex}.`,
+      '📢', '/farmer/queue',
+      nextFarmer.id,
+      { appointmentId: nextFarmer.id, tokenNumber: nextFarmer.token_number, counter: counterIndex }
     );
 
     // SMS to called farmer
@@ -571,8 +583,12 @@ class AgriFlowMongoDatabase {
       $set: { amount: actualWeightKg * 22, quantity_kg: actualWeightKg }
     });
 
-    await this.createNotification(appt.farmer_id, centreId, 'WEIGHMENT_COMPLETED', 'Weighment Completed',
-      `Weight certificate recorded: ${Number(actualWeightKg).toLocaleString()} kg net produce.`, '⚖️', '/farmer/procurement');
+    await this.createNotification(
+      appt.farmer_id, centreId, 'WEIGHMENT_COMPLETED', 'Weighment Completed',
+      `Weight certificate recorded: ${Number(actualWeightKg).toLocaleString()} kg net produce.`, '⚖️', '/farmer/procurement',
+      appt.id,
+      { appointmentId: appt.id, tokenNumber: appt.token_number, weight_kg: actualWeightKg }
+    );
 
     return {
       success: true,
@@ -613,8 +629,12 @@ class AgriFlowMongoDatabase {
       inspector_name: 'Quality Inspector'
     });
 
-    await this.createNotification(appt.farmer_id, centreId, 'QUALITY_COMPLETED', 'Quality Verification Completed',
-      `Quality verification completed for Token ${appt.token_number}.`, '🔬', '/farmer/procurement');
+    await this.createNotification(
+      appt.farmer_id, centreId, 'QUALITY_COMPLETED', 'Quality Verification Completed',
+      `Quality verification completed for Token ${appt.token_number}.`, '🔬', '/farmer/procurement',
+      appt.id,
+      { appointmentId: appt.id, tokenNumber: appt.token_number, grade: grade || 'Grade A', moisture: moisture || '13%' }
+    );
 
     return { success: true, message: `Quality recorded for ${appt.token_number}: ${grade}`, appointment: appt.toObject() };
   }
@@ -658,8 +678,12 @@ class AgriFlowMongoDatabase {
       next_action: 'Payment approval and DBT transfer'
     });
 
-    await this.createNotification(appt.farmer_id, centreId, 'PAYMENT_COMPLETED', 'Payment Processed',
-      `Your procurement payment has been processed.`, '💰', '/farmer/payments');
+    await this.createNotification(
+      appt.farmer_id, centreId, 'PAYMENT_COMPLETED', 'Payment Processed',
+      `Your procurement payment has been processed.`, '💰', '/farmer/payments',
+      appt.id,
+      { appointmentId: appt.id, tokenNumber: appt.token_number }
+    );
 
     if (appt.farmer_phone) {
       sendSMS(appt.farmer_phone, `AGRIFlow: Procurement COMPLETE! ${appt.actual_weight_kg || appt.declared_quantity_kg} kg accepted. Token: ${appt.token_number}. Payment processing.`)
@@ -703,11 +727,15 @@ class AgriFlowMongoDatabase {
     }
     await payment.save();
 
-    await this.createNotification(payment.farmer_id, payment.centre_id,
+    await this.createNotification(
+      payment.farmer_id, payment.centre_id,
       newStatus === 'PAID' ? 'PAYMENT_COMPLETED' : 'PAYMENT_UPDATE',
       newStatus === 'PAID' ? 'Payment Processed' : `Payment ${newStatus}`,
       newStatus === 'PAID' ? `Your procurement payment has been processed.` : `Your payment of ₹${payment.amount?.toLocaleString()} is now ${newStatus}. ${payment.reason}`,
-      '💰', '/farmer/payments');
+      '💰', '/farmer/payments',
+      payment.id,
+      { paymentId: payment.id, amount: payment.amount, status: newStatus }
+    );
 
     if (newStatus === 'PAID') {
       // Get farmer phone for SMS
@@ -1112,24 +1140,29 @@ class AgriFlowMongoDatabase {
     this.notificationEmitter = fn;
   }
 
-  async createNotification(farmerId, centreId, type, title, message, icon = '🔔', link = null) {
+  async createNotification(farmerId, centreId, type, title, message, icon = '🔔', link = null, relatedId = null, metadata = {}) {
     try {
       const notif = await Notification.create({
         id: `NOTIF-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
         farmer_id: farmerId,
+        farmerId: farmerId,
         centre_id: centreId || null,
         type,
         title,
         message,
         icon: icon || '🔔',
         link: link || null,
+        relatedId: relatedId || null,
+        metadata: metadata || {},
         read: false
       });
       if (this.notificationEmitter) {
         this.notificationEmitter(notif.toObject ? notif.toObject() : notif);
       }
+      return notif;
     } catch (e) {
       console.warn('[NOTIF] Failed to create notification:', e.message);
+      return null;
     }
   }
 
@@ -1669,7 +1702,9 @@ class AgriFlowMongoDatabase {
       'Slot Booked',
       `Token ${tokenNumber} confirmed for ${Number(finalQty).toLocaleString()} kg ${finalCrop}.`,
       '📅',
-      '/farmer/queue'
+      '/farmer/queue',
+      apptId,
+      { appointmentId: apptId, tokenNumber, quantity_kg: finalQty, crop: finalCrop }
     );
 
     if (farmer_phone) {

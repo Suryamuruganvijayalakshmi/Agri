@@ -38,7 +38,15 @@ export default function NotificationBellDropdown() {
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
 
-  const farmerId = user?.id;
+  const farmerId = user?.id || user?._id || user?.farmer_id;
+
+  const getHeaders = () => {
+    const token = localStorage.getItem('agriflow_token');
+    const h = { 'Content-Type': 'application/json' };
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    if (farmerId) h['x-farmer-id'] = farmerId;
+    return h;
+  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -56,7 +64,7 @@ export default function NotificationBellDropdown() {
     if (!farmerId) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/notifications/${farmerId}`);
+      const res = await fetch(`/api/notifications?farmerId=${farmerId}`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) {
         setNotifications(data.notifications || []);
@@ -73,7 +81,7 @@ export default function NotificationBellDropdown() {
   const fetchUnreadCount = useCallback(async () => {
     if (!farmerId) return;
     try {
-      const res = await fetch(`/api/notifications/${farmerId}/unread-count`);
+      const res = await fetch(`/api/notifications/unread-count?farmerId=${farmerId}`, { headers: getHeaders() });
       const data = await res.json();
       if (data.success) setUnreadCount(data.count || 0);
     } catch {}
@@ -87,7 +95,8 @@ export default function NotificationBellDropdown() {
 
     const handleNewNotif = (notif) => {
       // Only care about notifications for this farmer or ALL
-      if (notif.farmer_id && notif.farmer_id !== farmerId && notif.farmer_id !== 'ALL') return;
+      const nFarmer = notif.farmerId || notif.farmer_id;
+      if (nFarmer && nFarmer !== farmerId && nFarmer !== 'ALL') return;
       setUnreadCount(c => c + 1);
       // If dropdown is open, prepend the notification
       setNotifications(prev => {
@@ -97,8 +106,10 @@ export default function NotificationBellDropdown() {
     };
 
     const handleUpdated = (data) => {
-      if (data?.farmer_id === farmerId || data?.farmer_id === 'ALL') {
+      const uFarmer = data?.farmerId || data?.farmer_id;
+      if (!uFarmer || uFarmer === farmerId || uFarmer === 'ALL') {
         fetchUnreadCount();
+        if (open) loadNotifications();
       }
     };
 
@@ -115,7 +126,7 @@ export default function NotificationBellDropdown() {
       socket.off('notifications_updated', handleUpdated);
       clearInterval(poll);
     };
-  }, [role, farmerId, fetchUnreadCount]);
+  }, [role, farmerId, fetchUnreadCount, open, loadNotifications]);
 
   // Load full list when dropdown opens
   useEffect(() => {
@@ -127,7 +138,12 @@ export default function NotificationBellDropdown() {
     if (e) e.stopPropagation();
     setNotifications(prev => prev.map(n => n.id === nid ? { ...n, read: true } : n));
     setUnreadCount(c => Math.max(0, c - 1));
-    try { await fetch(`/api/notifications/read/${nid}`, { method: 'POST' }); } catch {}
+    try {
+      await fetch(`/api/notifications/${nid}/read`, {
+        method: 'PATCH',
+        headers: getHeaders()
+      });
+    } catch {}
   };
 
   // Mark all as read
@@ -135,7 +151,13 @@ export default function NotificationBellDropdown() {
     if (e) e.stopPropagation();
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     setUnreadCount(0);
-    try { await fetch(`/api/notifications/read-all/${farmerId}`, { method: 'POST' }); } catch {}
+    try {
+      await fetch(`/api/notifications/read-all`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ farmerId })
+      });
+    } catch {}
   };
 
   const handleNotifClick = (n) => {
