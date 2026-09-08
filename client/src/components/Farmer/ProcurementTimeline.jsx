@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Clock, ShieldCheck, CreditCard, ChevronRight, User, AlertCircle, FileText, XCircle } from 'lucide-react';
 import { cancelAppointmentAPI } from '../../services/api';
-import { supabase } from '../../lib/supabase';
 
 export default function ProcurementTimeline({ timeline }) {
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -26,23 +25,10 @@ export default function ProcurementTimeline({ timeline }) {
     setCancelMessage(null);
 
     try {
-      // 1. Try Supabase RPC `cancel_appointment`
-      if (proc.appointment_id) {
-        const { data: supaData, error: supaErr } = await supabase.rpc('cancel_appointment', {
-          p_appointment_id: proc.appointment_id
-        });
-        if (!supaErr && supaData?.success) {
-          setCancelMessage('Appointment cancelled in PostgreSQL. Position released to AVAILABLE.');
-          setCancelling(false);
-          setTimeout(() => window.location.reload(), 1500);
-          return;
-        }
-      }
-
-      // 2. Fallback Express API
+      // Direct API cancellation in MongoDB
       const res = await cancelAppointmentAPI(proc.appointment_id || proc.id);
       if (res.success) {
-        setCancelMessage('Appointment cancelled. Position released to AVAILABLE.');
+        setCancelMessage('Appointment cancelled in MongoDB. Position released to AVAILABLE.');
         setTimeout(() => window.location.reload(), 1500);
       } else {
         setCancelMessage(`Cancel failed: ${res.error}`);

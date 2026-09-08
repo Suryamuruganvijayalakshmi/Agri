@@ -22,6 +22,12 @@ export default function FarmerLogin() {
       setErrorMsg(res.error || 'Authentication failed. Please check your credentials.');
       setLoading(false);
     } else {
+      // Prompt user for push notification permission on login click gesture
+      try {
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+          await Notification.requestPermission();
+        }
+      } catch (err) {}
       navigate('/farmer/dashboard');
     }
   };
@@ -39,7 +45,7 @@ export default function FarmerLogin() {
             Farmer Portal Login
           </h2>
           <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
-            Sign in with your registered Supabase farmer credentials
+            Sign in with your registered Farmer credentials
           </p>
         </div>
 
@@ -49,7 +55,7 @@ export default function FarmerLogin() {
           </div>
         )}
 
-        {/* Real Supabase Password Form */}
+        {/* Farmer Password Form */}
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '0.3rem' }}>
@@ -91,7 +97,7 @@ export default function FarmerLogin() {
             className="btn btn-primary btn-lg"
             style={{ width: '100%', marginTop: '0.5rem' }}
           >
-            {loading ? 'Authenticating with Supabase...' : 'Sign In to Farmer Portal'}
+            {loading ? 'Authenticating...' : 'Sign In to Farmer Portal'}
           </button>
         </form>
 

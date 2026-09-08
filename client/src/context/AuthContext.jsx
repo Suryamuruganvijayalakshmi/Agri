@@ -41,14 +41,23 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  // After login/signup, re-register push subscription with the real userId
-  // so the server can target this specific user for notifications
+  // After login/signup, ask for push notification permission and re-register push subscription with the real userId
+  // so the server can target this specific user for real-time and lockscreen notifications
   async function afterAuthSuccess(u) {
     try {
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        await subscribeToRealWebPush();
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'default') {
+          const perm = await Notification.requestPermission();
+          if (perm === 'granted') {
+            await subscribeToRealWebPush();
+          }
+        } else if (Notification.permission === 'granted') {
+          await subscribeToRealWebPush();
+        }
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[Auth] Push notification permission request error:', err);
+    }
   }
 
   // MongoDB Sign In

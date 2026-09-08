@@ -572,3 +572,38 @@ html, body {
     color: #0f172a !important;
   }
 }
+
+/* ============================================================
+   GOOGLE TRANSLATE SILENT INTEGRATION (Entire Site Localization)
+   ============================================================ */
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+iframe.goog-te-banner-frame {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+.skiptranslate:not(.goog-te-combo) {
+  display: none !important;
+}
+
+#goog-gt-tt,
+.goog-te-balloon-frame {
+  display: none !important;
+}
+
+.goog-text-highlight {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+font[style] {
+  background: transparent !important;
+}
+

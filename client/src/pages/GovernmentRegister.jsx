@@ -60,7 +60,7 @@ export default function GovernmentRegister() {
       district: activeFac ? (activeFac.district || 'Mandya') : 'Mandya'
     };
 
-    // Execute Supabase Auth signUp for Officer
+    // Execute MongoDB Auth signUp for Officer
     const res = await signUp({
       email,
       password,

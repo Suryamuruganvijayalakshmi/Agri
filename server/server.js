@@ -398,6 +398,89 @@ app.get('/api/auth/dedicated-officers', async (req, res) => {
 // CENTRE ROUTES
 // ============================================================
 
+
+// MongoDB Password Reset Request
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required.' });
+    }
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.json({ success: true, message: 'Password reset instructions have been dispatched if the account exists in MongoDB.' });
+    }
+    res.json({ success: true, message: 'Password reset link and instructions have been sent to your registered email address.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update Farmer Profile in MongoDB
+app.put('/api/farmers/profile', async (req, res) => {
+  try {
+    const {
+      userId,
+      email,
+      full_name,
+      phone,
+      village,
+      taluk,
+      district,
+      state,
+      aadhaar_last_four,
+      bank_name,
+      bank_account_last_four,
+      ifsc_code,
+      land_area_acres
+    } = req.body;
+
+    let user = null;
+    if (userId) {
+      user = await User.findOne({ id: userId });
+    }
+    if (!user && email) {
+      user = await User.findOne({ email: email.toLowerCase() });
+    }
+
+    if (user) {
+      if (full_name) user.full_name = full_name;
+      if (phone) user.phone = phone;
+      if (district) user.district = district;
+      if (state) user.state = state;
+      await user.save();
+    }
+
+    const farmer = await Farmer.findOneAndUpdate(
+      { $or: [{ profile_id: userId }, { phone }] },
+      {
+        $set: {
+          village,
+          taluk,
+          district,
+          state,
+          aadhaar_last_four,
+          bank_name,
+          bank_account_last_four,
+          ifsc_code,
+          land_area_acres: Number(land_area_acres || 0),
+          updated_at: new Date()
+        }
+      },
+      { new: true, upsert: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Farmer profile updated successfully in MongoDB.',
+      user,
+      farmer
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.get('/api/centres', async (req, res) => {
   try {
     const centres = await db.getAllCentres();

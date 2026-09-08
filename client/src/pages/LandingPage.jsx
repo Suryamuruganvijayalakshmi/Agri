@@ -111,7 +111,7 @@ export default function LandingPage() {
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><CheckCircle2 size={16} color="#4ade80" /> Real-time Leaflet Map</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><CheckCircle2 size={16} color="#4ade80" /> Capacity-Aware Slot Locking</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><CheckCircle2 size={16} color="#4ade80" /> Explainable Status Updates</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><CheckCircle2 size={16} color="#4ade80" /> Supabase Realtime Engine</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}><CheckCircle2 size={16} color="#4ade80" /> MongoDB & Real-Time Engine</span>
       </div>
 
     </div>

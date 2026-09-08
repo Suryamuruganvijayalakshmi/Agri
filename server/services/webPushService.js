@@ -3,11 +3,22 @@
 import webpush from 'web-push';
 import { PushSubscription } from '../models/PushSubscription.js';
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+let VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+let VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:support@agriflow.gov.in';
 
 let vapidReady = false;
+
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  try {
+    const generated = webpush.generateVAPIDKeys();
+    VAPID_PUBLIC_KEY = generated.publicKey;
+    VAPID_PRIVATE_KEY = generated.privateKey;
+    console.log('⚡ [Web Push] Auto-generated VAPID keypair. Background push ready (like Instagram).');
+  } catch (genErr) {
+    console.warn('⚠️ [Web Push] Failed to auto-generate VAPID keys:', genErr.message);
+  }
+}
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   try {
@@ -16,11 +27,7 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
     console.log('✅ [Web Push] VAPID initialized. Background push notifications ready (like Instagram).');
   } catch (err) {
     console.error('❌ [Web Push] VAPID initialization FAILED:', err.message);
-    console.error('   → Check VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in server/.env');
   }
-} else {
-  console.warn('⚠️  [Web Push] VAPID keys NOT found in .env. Background push notifications disabled.');
-  console.warn('   → Add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to server/.env to enable lockscreen alerts.');
 }
 
 export function getVapidPublicKey() {

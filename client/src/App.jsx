@@ -40,6 +40,7 @@ import {
   testLockscreenNotification
 } from './services/notificationManager';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import { Sprout, LogOut, User, MapPin, Calendar, Clock, CreditCard, ShieldCheck, Zap, Globe, Activity, Bell, RefreshCw, Menu, X, BarChart3, FileSpreadsheet, FileText } from 'lucide-react';
 
 function NavigationBar({ onOpenDemoModal }) {
@@ -386,6 +387,28 @@ function NavigationBar({ onOpenDemoModal }) {
             </div>
           )}
 
+          {/* Mobile Language Selector */}
+          <div style={{ padding: '0.65rem 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1e293b', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '0.82rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Globe size={15} /> Site Language:
+            </span>
+            <select
+              value={lang}
+              onChange={(e) => {
+                setLang(e.target.value);
+                setMobileMenuOpen(false);
+              }}
+              className="nav-select"
+              style={{ background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+            >
+              <option value="en">English (EN)</option>
+              <option value="hi">हिंदी (Hindi)</option>
+              <option value="kn">ಕನ್ನಡ (Kannada)</option>
+              <option value="ta">தமிழ் (Tamil)</option>
+              <option value="te">తెలుగు (Telugu)</option>
+            </select>
+          </div>
+
           {user && (
             <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #1e293b' }}>
               <button
@@ -477,6 +500,9 @@ function MainAppContent() {
 
   return (
     <div className="app-container">
+      {/* Real-Time Push Notification Permission Prompt (Triggers upon Login) */}
+      <NotificationPermissionPrompt />
+
       {/* Floating Push Notification Toast with Mobile Fit */}
       {toast && (
         <div

@@ -69,7 +69,7 @@ export default function InspectorDashboardPage() {
       if (res.success) {
         setMessage({
           type: 'success',
-          text: `Produce ${decision === 'ACCEPT' ? 'ACCEPTED & APPROVED' : 'REJECTED'}. Record updated in Supabase!`
+          text: `Produce ${decision === 'ACCEPT' ? 'ACCEPTED & APPROVED' : 'REJECTED'}. Record updated in MongoDB Database!`
         });
 
         setInspections(prev => prev.map(i => i.id === selectedInspection.id ? { ...i, status: decision === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED' } : i));

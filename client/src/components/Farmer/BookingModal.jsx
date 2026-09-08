@@ -20,7 +20,7 @@ export default function BookingModal({ centre, farmerId = 'F-1042', farmerName =
       <div className="modal-content" style={{ maxWidth: '780px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
           <div>
-            <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>Supabase Real-Time Database</span>
+            <span className="badge badge-green" style={{ fontSize: '0.65rem' }}>MongoDB Real-Time Database</span>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '0.2rem 0 0 0' }}>
               Book Position: {centre?.name || 'Mandya Central Yard'}
             </h2>

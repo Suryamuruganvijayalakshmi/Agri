@@ -119,6 +119,13 @@ export default function GovernmentLogin() {
 
     const u = res.user;
 
+    // Prompt for notification permission upon officer login
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+    } catch (err) {}
+
     // Lock selected centre in storage
     if (u.assigned_centre_id) {
       localStorage.setItem('agriflow_selected_centre_id', u.assigned_centre_id);

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
 import { User, Phone, MapPin, CreditCard, ShieldCheck, CheckCircle2, Save, AlertCircle } from 'lucide-react';
 
 export default function FarmerProfilePage() {
@@ -28,31 +27,32 @@ export default function FarmerProfilePage() {
     setMsg(null);
 
     try {
-      if (user?.id) {
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            full_name: fullName,
-            phone,
-            village,
-            taluk,
-            district,
-            state,
-            aadhaar_last_four: aadhaarLastFour,
-            bank_name: bankName,
-            bank_account_last_four: accountLastFour,
-            ifsc_code: ifsc,
-            land_area_acres: Number(landAreaAcres),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id);
+      const res = await fetch('/api/farmers/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.id,
+          email: user?.email,
+          full_name: fullName,
+          phone,
+          village,
+          taluk,
+          district,
+          state,
+          aadhaar_last_four: aadhaarLastFour,
+          bank_name: bankName,
+          bank_account_last_four: accountLastFour,
+          ifsc_code: ifsc,
+          land_area_acres: Number(landAreaAcres)
+        })
+      });
+      const data = await res.json();
 
-        if (error) {
-          console.warn('Supabase profile update warning:', error);
-        }
+      if (!res.ok || !data.success) {
+        setMsg({ type: 'error', text: data.error || 'Failed to update profile in database.' });
+      } else {
+        setMsg({ type: 'success', text: 'Farmer profile updated successfully in MongoDB!' });
       }
-
-      setMsg({ type: 'success', text: 'Farmer profile updated successfully!' });
     } catch (err) {
       setMsg({ type: 'error', text: err.message || 'Failed to update profile.' });
     } finally {
