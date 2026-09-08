@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Building2, Activity, AlertTriangle, CheckCircle2, Clock, MapPin, ShieldCheck, ArrowUpRight } from 'lucide-react';
+import { Building2, Activity, AlertTriangle, CheckCircle2, Clock, MapPin, ShieldCheck, ArrowUpRight, BarChart3, FileSpreadsheet } from 'lucide-react';
 import ProcurementMap from '../components/Map/ProcurementMap';
 import RealtimePackageMonitorWidget from '../components/Farmer/RealtimePackageMonitorWidget';
 import { fetchAdminMetrics } from '../services/api';
@@ -47,7 +48,21 @@ export default function DistrictOfficerDashboard({ centres: liveCentres }) {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <Link
+              to="/operator/analytics"
+              className="btn btn-primary"
+              style={{ background: 'linear-gradient(135deg, #0284c7, #0369a1)', fontSize: '0.82rem', fontWeight: 800, padding: '0.45rem 0.85rem' }}
+            >
+              <BarChart3 size={15} /> 📊 Performance Analytics
+            </Link>
+            <Link
+              to="/operator/statements"
+              className="btn btn-secondary"
+              style={{ background: '#334155', color: '#fbbf24', border: '1px solid #d97706', fontSize: '0.82rem', fontWeight: 800, padding: '0.45rem 0.85rem' }}
+            >
+              <FileSpreadsheet size={15} /> 📑 Payment Statements
+            </Link>
             <span className="badge badge-green">🟢 {operationalCount} Available</span>
             <span className="badge badge-yellow">🟡 {highLoadCount} Busy</span>
             <span className="badge badge-red">🔴 {fullCount} Full</span>
@@ -92,7 +107,7 @@ export default function DistrictOfficerDashboard({ centres: liveCentres }) {
       </div>
 
       {/* Grid: Left Map, Right District Centres List */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '1.5rem' }}>
+      <div className="responsive-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '1.5rem' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="card-header" style={{ marginBottom: 0 }}>
             <h3 className="card-title"><MapPin size={20} color="#16a34a" /> District Live Availability Map</h3>

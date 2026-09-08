@@ -33,7 +33,7 @@ import DemoStoryRunner from './components/Demo/DemoStoryRunner';
 
 import { socket } from './services/socket';
 import { fetchCentres, resetDatabaseAPI } from './services/api';
-import { Sprout, LogOut, User, MapPin, Calendar, Clock, CreditCard, ShieldCheck, Zap, Globe, Activity, Bell, RefreshCw } from 'lucide-react';
+import { Sprout, LogOut, User, MapPin, Calendar, Clock, CreditCard, ShieldCheck, Zap, Globe, Activity, Bell, RefreshCw, Menu, X, BarChart3, FileSpreadsheet, FileText } from 'lucide-react';
 import { translations } from './i18n/translations';
 
 function NavigationBar({ lang, setLang, onOpenDemoModal }) {
@@ -41,9 +41,15 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const t = translations[lang] || translations.en;
+
+  // Close mobile drawer when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   // Fetch unread notification count for farmers
   useEffect(() => {
@@ -132,8 +138,18 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
           </div>
         </Link>
 
-        {/* Role-based navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        {/* Mobile Hamburger Button */}
+        <button
+          type="button"
+          className="mobile-nav-btn"
+          onClick={() => setMobileMenuOpen(prev => !prev)}
+          aria-label="Toggle Navigation Menu"
+        >
+          {mobileMenuOpen ? <X size={22} color="#f8fafc" /> : <Menu size={22} color="#f8fafc" />}
+        </button>
+
+        {/* Desktop Role-based navigation */}
+        <div className="desktop-nav" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
 
           {/* Guest navigation */}
           {!user && (
@@ -200,7 +216,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
                   fontWeight: 700
                 }}
               >
-                🔔 Realtime Queue
+                🔔 Queue
               </Link>
               <Link
                 to="/operator/weighment"
@@ -228,7 +244,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
                   fontWeight: 700
                 }}
               >
-                🔬 Quality Check
+                🔬 Quality
               </Link>
               <Link
                 to="/operator/payments"
@@ -242,7 +258,35 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
                   fontWeight: 700
                 }}
               >
-                💳 Payment Steps
+                💳 Payments
+              </Link>
+              <Link
+                to="/operator/analytics"
+                style={{
+                  color: location.pathname === '/operator/analytics' ? '#38bdf8' : '#cbd5e1',
+                  background: location.pathname === '/operator/analytics' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                  border: location.pathname === '/operator/analytics' ? '1px solid #0284c7' : '1px solid transparent',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700
+                }}
+              >
+                📊 Analytics
+              </Link>
+              <Link
+                to="/operator/statements"
+                style={{
+                  color: location.pathname === '/operator/statements' ? '#fbbf24' : '#cbd5e1',
+                  background: location.pathname === '/operator/statements' ? 'rgba(251, 191, 36, 0.15)' : 'transparent',
+                  border: location.pathname === '/operator/statements' ? '1px solid #d97706' : '1px solid transparent',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 700
+                }}
+              >
+                📑 Statements
               </Link>
               <Link
                 to="/govt/crop-intelligence"
@@ -256,7 +300,7 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
                   fontWeight: 700
                 }}
               >
-                ✨ Crop Forecast & AI
+                ✨ Crop AI
               </Link>
             </div>
           )}
@@ -269,12 +313,13 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
           )}
 
           {(role === 'DISTRICT_OFFICER' || role === 'STATE_ADMIN') && (
-            <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.85rem' }}>
-              <Link to="/admin/overview" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Overview</Link>
+            <div style={{ display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}>
+              <Link to="/admin/overview" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>🏛️ Overview</Link>
+              <Link to="/operator/analytics" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>📊 Analytics</Link>
+              <Link to="/operator/statements" style={{ color: '#fbbf24', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>📑 Statements</Link>
               <Link to="/farmer/my-farm" style={{ color: '#4ade80', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>🌾 My Farm</Link>
-              <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>✨ Crop Forecast & AI</Link>
+              <Link to="/govt/crop-intelligence" style={{ color: '#f59e0b', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>✨ Crop AI</Link>
               <Link to="/admin/centres" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Centres</Link>
-              <Link to="/admin/analytics" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>Analytics</Link>
             </div>
           )}
 
@@ -312,6 +357,94 @@ function NavigationBar({ lang, setLang, onOpenDemoModal }) {
 
         </div>
       </div>
+
+      {/* Collapsible Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div className="mobile-drawer">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid #1e293b' }}>
+            <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 700 }}>
+              {user ? `Logged in: ${profile?.full_name || user.email}` : 'AGRIFlow Mobile Menu'}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Globe size={14} color="#94a3b8" />
+              <select
+                value={lang}
+                onChange={(e) => setLang(e.target.value)}
+                style={{ background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '4px', fontSize: '0.75rem', padding: '0.2rem 0.4rem' }}
+              >
+                <option value="en">English (EN)</option>
+                <option value="hi">हिंदी (Hindi)</option>
+                <option value="kn">ಕನ್ನಡ (Kannada)</option>
+                <option value="ta">தமிழ் (Tamil)</option>
+                <option value="te">తెలుగు (Telugu)</option>
+              </select>
+            </div>
+          </div>
+
+          {!user && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <Link to="/farmer/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🏢 Centres Directory</Link>
+              <Link to="/farmer/map" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🗺️ Facilities Map</Link>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <Link to="/farmer/login" onClick={() => setMobileMenuOpen(false)} className="btn btn-primary" style={{ textAlign: 'center' }}>Farmer Login</Link>
+                <Link to="/government/login" onClick={() => setMobileMenuOpen(false)} className="btn btn-secondary" style={{ textAlign: 'center', background: '#1e293b', color: 'white' }}>Officer Login</Link>
+              </div>
+            </div>
+          )}
+
+          {role === 'FARMER' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <Link to="/farmer/dashboard" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">📊 Dashboard Overview</Link>
+              <Link to="/farmer/my-farm" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🌾 My Farm & RTC Land</Link>
+              <Link to="/farmer/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🏢 Procurement Centres</Link>
+              <Link to="/farmer/map" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🗺️ Facilities Map</Link>
+              <Link to="/farmer/appointments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">📅 Book Procurement Slot</Link>
+              <Link to="/farmer/queue" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🔔 Live Yard Queue</Link>
+              <Link to="/farmer/procurement" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">⏱️ Live Journey Timeline</Link>
+              <Link to="/farmer/payments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">💳 DBT Payment Tracker</Link>
+              <Link to="/farmer/notifications" onClick={() => { setUnreadCount(0); setMobileMenuOpen(false); }} className="mobile-nav-link">
+                <Bell size={16} /> Notifications {unreadCount > 0 && `(${unreadCount})`}
+              </Link>
+            </div>
+          )}
+
+          {role === 'CENTRE_OPERATOR' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <Link to="/operator/appointments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🖥️ Operator Console</Link>
+              <Link to="/operator/queue" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🔔 Realtime Queue & Calls</Link>
+              <Link to="/operator/weighment" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">⚖️ Weighbridge Station</Link>
+              <Link to="/operator/quality" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🔬 Quality & Moisture Check</Link>
+              <Link to="/operator/payments" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">💳 Payment & DBT Actions</Link>
+              <Link to="/operator/analytics" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#38bdf8' }}>📊 Performance Analytics (Daily/Weekly/Monthly)</Link>
+              <Link to="/operator/statements" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#fbbf24' }}>📑 Payment Statements & Reconciliation</Link>
+              <Link to="/govt/crop-intelligence" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">✨ AI Crop Intelligence</Link>
+            </div>
+          )}
+
+          {(role === 'DISTRICT_OFFICER' || role === 'STATE_ADMIN') && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              <Link to="/admin/overview" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🏛️ District Nodal Overview</Link>
+              <Link to="/operator/analytics" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#38bdf8' }}>📊 Performance Analytics (Daily/Weekly/Monthly)</Link>
+              <Link to="/operator/statements" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link" style={{ color: '#fbbf24' }}>📑 Payment Statements & Reconciliation</Link>
+              <Link to="/farmer/my-farm" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🌾 My Farm</Link>
+              <Link to="/govt/crop-intelligence" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">✨ Crop Forecast & AI</Link>
+              <Link to="/admin/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">🏢 Centres Breakdown</Link>
+            </div>
+          )}
+
+          {user && (
+            <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #1e293b' }}>
+              <button
+                onClick={() => { setMobileMenuOpen(false); setShowSignOutConfirm(true); }}
+                className="btn btn-secondary mobile-full-width"
+                style={{ background: '#334155', color: 'white', border: 'none', justifyContent: 'center' }}
+              >
+                <LogOut size={16} /> Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Sign Out Confirmation Modal */}
       {showSignOutConfirm && (
@@ -567,6 +700,26 @@ function MainAppContent() {
                 <OperatorDashboard centres={centres} selectedCentreId={localStorage.getItem('agriflow_selected_centre_id') || 'centre-1'} onDataChanged={loadMasterCentres} />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/operator/analytics"
+            element={
+              <ProtectedRoute allowedRoles={['CENTRE_OPERATOR', 'DISTRICT_OFFICER', 'STATE_ADMIN']} loginPath="/government/login">
+                <OperatorDashboard centres={centres} selectedCentreId={localStorage.getItem('agriflow_selected_centre_id') || 'centre-1'} onDataChanged={loadMasterCentres} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/operator/statements"
+            element={
+              <ProtectedRoute allowedRoles={['CENTRE_OPERATOR', 'DISTRICT_OFFICER', 'STATE_ADMIN']} loginPath="/government/login">
+                <OperatorDashboard centres={centres} selectedCentreId={localStorage.getItem('agriflow_selected_centre_id') || 'centre-1'} onDataChanged={loadMasterCentres} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/operator/statement"
+            element={<Navigate to="/operator/statements" replace />}
           />
 
           {/* Protected Inspector Routes */}
