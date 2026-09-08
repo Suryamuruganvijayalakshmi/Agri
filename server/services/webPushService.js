@@ -30,6 +30,43 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   }
 }
 
+const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || '67abcb09-7a13-4c19-85d3-223a44d887c0';
+const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+
+export function getOneSignalAppId() {
+  return ONESIGNAL_APP_ID;
+}
+
+export async function sendOneSignalPush(title, message, options = {}) {
+  if (!ONESIGNAL_APP_ID) return;
+  try {
+    const payload = {
+      app_id: ONESIGNAL_APP_ID,
+      included_segments: ['Subscribed Users', 'Total Subscriptions'],
+      headings: { en: title || 'AGRIFlow Live Alert' },
+      contents: { en: message || 'Operational Update' },
+      url: options.url || '/',
+      data: options.data || {}
+    };
+
+    const headers = { 'Content-Type': 'application/json; charset=utf-8' };
+    if (ONESIGNAL_REST_API_KEY) {
+      headers['Authorization'] = `Basic ${ONESIGNAL_REST_API_KEY}`;
+    }
+
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    console.log('⚡ [OneSignal Push] Broadcast result:', result);
+    return result;
+  } catch (err) {
+    console.warn('⚠️ [OneSignal Push] Failed:', err.message);
+  }
+}
+
 export function getVapidPublicKey() {
   return VAPID_PUBLIC_KEY || null;
 }
@@ -83,6 +120,9 @@ async function sendToOne(sub, payload) {
 
 // Broadcast real push to ALL subscribed devices (works with phone locked / site closed!)
 export async function broadcastPushNotification(title, message, options = {}) {
+  // Dispatch via OneSignal for mobile lock screens and native push
+  sendOneSignalPush(title, message, options).catch(() => {});
+
   if (!vapidReady) {
     console.warn('[Web Push] Broadcast skipped — VAPID not configured. Add keys to .env');
     return { sent: 0, failed: 0, error: 'VAPID not configured' };

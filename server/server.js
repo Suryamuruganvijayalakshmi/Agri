@@ -545,7 +545,18 @@ app.get('/api/slots', async (req, res) => {
     const { centre_id, date } = req.query;
     if (!centre_id) return res.status(400).json({ success: false, error: 'centre_id is required' });
     const slots = await db.getSlotsForCentre(centre_id, date);
-    res.json({ success: true, slots });
+    
+    // Determine the best recommended slot for real-time booking
+    const currentSlot = slots.find(s => s.is_current && s.is_available);
+    const nextSlot = slots.find(s => s.is_upcoming && s.is_available);
+    const recommendedSlot = currentSlot || nextSlot || slots.find(s => s.is_available) || slots[0];
+
+    res.json({
+      success: true,
+      slots,
+      server_time: new Date().toISOString(),
+      recommended_slot_id: recommendedSlot?.id || null
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -972,13 +983,26 @@ app.post('/api/products', async (req, res) => {
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// Direct position booking
+// Direct position booking (Single or Multi-Bay)
 app.post('/api/booking/position', async (req, res) => {
   try {
     const result = await db.bookAppointmentPosition(req.body);
     if (!result.success) return res.status(400).json(result);
     await broadcastRealtimeUpdate('appointment_booked', { appointment: result.appointment, centre_id: result.appointment?.centre_id });
     await broadcastRealtimeUpdate('queue_updated', { centre_id: result.appointment?.centre_id });
+    await broadcastRealtimeUpdate('slot_position_updated', { slot_id: result.appointment?.slot_id, centre_id: result.appointment?.centre_id });
+    await broadcastRealtimeUpdate('slots_updated', { centre_id: result.appointment?.centre_id });
+
+    if (result.appointment) {
+      sendBookingConfirmationEmail(result.appointment, { farmer_name: result.appointment.farmer_name }).catch(() => {});
+      sendAgentBookingNotification(result.appointment).catch(() => {});
+      broadcastPushNotification(
+        '✅ Storage Slot Confirmed!',
+        `Token #${result.appointment.token_number} at ${result.appointment.centre_name}. ${result.appointment.bays_label || 'Bay #' + result.appointment.position_number}`,
+        { url: '/queue' }
+      ).catch(() => {});
+    }
+
     res.json(result);
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });

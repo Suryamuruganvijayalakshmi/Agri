@@ -131,16 +131,7 @@ class AgriFlowMongoDatabase {
       };
     }
 
-    // Check for existing active booking for this farmer at any centre today
     const todayStr = appointment_date || new Date().toISOString().split('T')[0];
-    const existingBooking = await Appointment.findOne({
-      farmer_id,
-      appointment_date: todayStr,
-      status: { $nin: ['COMPLETED', 'CANCELLED'] }
-    });
-    if (existingBooking) {
-      return { success: false, error: `You already have an active booking (Token: ${existingBooking.token_number}) for today. Complete or cancel it first.` };
-    }
 
     // Ensure slots and slot positions exist for today
     await this.getSlotsForCentre(centre_id, todayStr);
@@ -152,20 +143,30 @@ class AgriFlowMongoDatabase {
       $or: [{ start_time: time_slot }, { id: time_slot }]
     }) || await Slot.findOne({ centre_id, slot_date: todayStr, is_available: true });
 
-    let claimedPosition = null;
-    if (slot) {
-      claimedPosition = await SlotPosition.findOneAndUpdate(
-        { slot_id: slot.id, status: 'AVAILABLE' },
-        { $set: { status: 'BOOKED', booked_by: farmer_id || 'unknown', booked_at: new Date() } },
-        { new: true, sort: { position_number: 1 } }
-      );
-      if (!claimedPosition) {
-        return { success: false, error: `Time slot (${time_slot || slot.start_time}) is fully booked (all 20 bays occupied). Please select another open time slot.` };
-      }
-      slot.current_bookings = await SlotPosition.countDocuments({ slot_id: slot.id, status: 'BOOKED' });
-      slot.is_available = slot.current_bookings < slot.maximum_bookings;
-      await slot.save();
+    if (!slot) {
+      return { success: false, error: 'No available storage slots found for the requested date and centre.' };
     }
+
+    // MULTI-SLOT / MULTI-BAY ALLOCATION (> 500kg)
+    // Each storage bay holds 500 kg. If farmer has > 500kg, allocate multiple bays atomically.
+    const baysNeeded = Math.max(1, Math.ceil(Number(quantity_kg) / 500));
+    
+    // Find available positions in this slot
+    const availablePositions = await SlotPosition.find({
+      slot_id: slot.id,
+      status: 'AVAILABLE'
+    }).sort({ position_number: 1 }).limit(baysNeeded);
+
+    if (availablePositions.length < baysNeeded) {
+      return {
+        success: false,
+        error: `Time slot (${time_slot || slot.start_time}) only has ${availablePositions.length} open bays, but declared ${Number(quantity_kg).toLocaleString()} kg requires ${baysNeeded} storage bays. Please choose another open time slot or split across slots.`
+      };
+    }
+
+    const claimedIds = availablePositions.map(p => p.id);
+    const claimedBayNumbers = availablePositions.map(p => p.position_number);
+    const baysLabel = claimedBayNumbers.map(n => `Bay #${n < 10 ? '0' + n : n}`).join(', ');
 
     // Generate unique token
     const tokenNumber = await this.generateToken(centre_id);
@@ -199,17 +200,25 @@ class AgriFlowMongoDatabase {
       appointment_date: todayStr,
       time_slot: time_slot || slot?.start_time || '09:00 AM',
       slot_id: slot ? slot.id : null,
-      position_number: claimedPosition ? claimedPosition.position_number : 1,
+      position_number: claimedBayNumbers[0],
+      position_numbers: claimedBayNumbers,
+      bays_label: baysLabel,
+      is_multi_slot: baysNeeded > 1,
       crop_type: crop || 'Paddy',
       quantity_kg: quantity_kg || 0,
       declared_quantity_kg: quantity_kg || 0,
       status: 'WAITING'
     });
 
-    if (claimedPosition) {
-      claimedPosition.appointment_id = apptId;
-      await claimedPosition.save();
-    }
+    // Mark all claimed positions as BOOKED
+    await SlotPosition.updateMany(
+      { id: { $in: claimedIds } },
+      { $set: { status: 'BOOKED', booked_by: farmer_id || 'unknown', booked_at: new Date(), appointment_id: apptId } }
+    );
+
+    slot.current_bookings = await SlotPosition.countDocuments({ slot_id: slot.id, status: 'BOOKED' });
+    slot.is_available = slot.current_bookings < slot.maximum_bookings;
+    await slot.save();
 
     // Create procurement record
     const procId = `PROC-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
@@ -1287,66 +1296,153 @@ class AgriFlowMongoDatabase {
     };
   }
 
-  // ── SLOTS ───────────────────────────────────────────────
+  // ── SLOTS WITH REAL-TIME DATE & TIME FETCHING ─────────
   async getSlotsForCentre(centreId, dateStr) {
     if (!this.isMongoConnected()) return [];
-    const todayStr = dateStr || new Date().toISOString().split('T')[0];
-    let slots = await Slot.find({ centre_id: centreId, slot_date: todayStr }).lean();
 
-    // If no slots exist for this centre and date, generate them on-demand
-    if (slots.length === 0) {
-      const defaultTimes = [
-        { suffix: '0800', time: '08:00 - 08:30 AM' },
-        { suffix: '0830', time: '08:30 - 09:00 AM' },
-        { suffix: '0900', time: '09:00 - 09:30 AM' },
-        { suffix: '0930', time: '09:30 - 10:00 AM' },
-        { suffix: '1000', time: '10:00 - 10:30 AM' },
-        { suffix: '1030', time: '10:30 - 11:00 AM' },
-        { suffix: '1100', time: '11:00 - 11:30 AM' },
-        { suffix: '1200', time: '12:00 - 12:30 PM' },
-        { suffix: '1400', time: '02:00 - 02:30 PM' }
-      ];
+    // Compute current real-time date and time in local / IST
+    const now = new Date();
+    const localYear = now.getFullYear();
+    const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const localDay = String(now.getDate()).padStart(2, '0');
+    const serverTodayStr = `${localYear}-${localMonth}-${localDay}`;
+    const targetDateStr = dateStr || serverTodayStr;
+    const currentMinutesNow = now.getHours() * 60 + now.getMinutes();
 
-      for (const t of defaultTimes) {
-        const slotId = `slot-${centreId}-${todayStr}-${t.suffix}`;
-        await Slot.create({
-          id: slotId,
-          centre_id: centreId,
-          slot_date: todayStr,
-          start_time: t.time,
-          end_time: t.time,
-          maximum_bookings: 20,
-          current_bookings: 0,
-          is_available: true
-        });
+    // 24 half-hour operating slots from 08:00 AM to 08:00 PM
+    const FULL_DAY_SLOT_DEFS = [
+      { suffix: '0800', time: '08:00 - 08:30 AM', startMin: 8 * 60, endMin: 8 * 60 + 30 },
+      { suffix: '0830', time: '08:30 - 09:00 AM', startMin: 8 * 60 + 30, endMin: 9 * 60 },
+      { suffix: '0900', time: '09:00 - 09:30 AM', startMin: 9 * 60, endMin: 9 * 60 + 30 },
+      { suffix: '0930', time: '09:30 - 10:00 AM', startMin: 9 * 60 + 30, endMin: 10 * 60 },
+      { suffix: '1000', time: '10:00 - 10:30 AM', startMin: 10 * 60, endMin: 10 * 60 + 30 },
+      { suffix: '1030', time: '10:30 - 11:00 AM', startMin: 10 * 60 + 30, endMin: 11 * 60 },
+      { suffix: '1100', time: '11:00 - 11:30 AM', startMin: 11 * 60, endMin: 11 * 60 + 30 },
+      { suffix: '1130', time: '11:30 - 12:00 PM', startMin: 11 * 60 + 30, endMin: 12 * 60 },
+      { suffix: '1200', time: '12:00 - 12:30 PM', startMin: 12 * 60, endMin: 12 * 60 + 30 },
+      { suffix: '1230', time: '12:30 - 01:00 PM', startMin: 12 * 60 + 30, endMin: 13 * 60 },
+      { suffix: '1300', time: '01:00 - 01:30 PM', startMin: 13 * 60, endMin: 13 * 60 + 30 },
+      { suffix: '1330', time: '01:30 - 02:00 PM', startMin: 13 * 60 + 30, endMin: 14 * 60 },
+      { suffix: '1400', time: '02:00 - 02:30 PM', startMin: 14 * 60, endMin: 14 * 60 + 30 },
+      { suffix: '1430', time: '02:30 - 03:00 PM', startMin: 14 * 60 + 30, endMin: 15 * 60 },
+      { suffix: '1500', time: '03:00 - 03:30 PM', startMin: 15 * 60, endMin: 15 * 60 + 30 },
+      { suffix: '1530', time: '03:30 - 04:00 PM', startMin: 15 * 60 + 30, endMin: 16 * 60 },
+      { suffix: '1600', time: '04:00 - 04:30 PM', startMin: 16 * 60, endMin: 16 * 60 + 30 },
+      { suffix: '1630', time: '04:30 - 05:00 PM', startMin: 16 * 60 + 30, endMin: 17 * 60 },
+      { suffix: '1700', time: '05:00 - 05:30 PM', startMin: 17 * 60, endMin: 17 * 60 + 30 },
+      { suffix: '1730', time: '05:30 - 06:00 PM', startMin: 17 * 60 + 30, endMin: 18 * 60 },
+      { suffix: '1800', time: '06:00 - 06:30 PM', startMin: 18 * 60, endMin: 18 * 60 + 30 },
+      { suffix: '1830', time: '06:30 - 07:00 PM', startMin: 18 * 60 + 30, endMin: 19 * 60 },
+      { suffix: '1900', time: '07:00 - 07:30 PM', startMin: 19 * 60, endMin: 19 * 60 + 30 },
+      { suffix: '1930', time: '07:30 - 08:00 PM', startMin: 19 * 60 + 30, endMin: 20 * 60 }
+    ];
 
-        for (let p = 1; p <= 20; p++) {
-          await SlotPosition.create({
-            id: `${slotId}-pos-${p}`,
-            slot_id: slotId,
-            position_number: p,
-            status: 'AVAILABLE',
-            appointment_id: null,
-            booked_by: null,
-            booked_at: null
+    let existingSlots = await Slot.find({ centre_id: centreId, slot_date: targetDateStr }).lean();
+    const existingSlotSuffixes = new Set(existingSlots.map(s => {
+      const parts = s.id.split('-');
+      return parts[parts.length - 1];
+    }));
+
+    // Generate any missing slots
+    for (const def of FULL_DAY_SLOT_DEFS) {
+      if (!existingSlotSuffixes.has(def.suffix)) {
+        const slotId = `slot-${centreId}-${targetDateStr}-${def.suffix}`;
+        try {
+          await Slot.create({
+            id: slotId,
+            centre_id: centreId,
+            slot_date: targetDateStr,
+            start_time: def.time,
+            end_time: def.time,
+            maximum_bookings: 20,
+            current_bookings: 0,
+            is_available: true
           });
+
+          // Create 20 positions for this slot
+          const newPosDocs = [];
+          for (let p = 1; p <= 20; p++) {
+            newPosDocs.push({
+              id: `${slotId}-pos-${p}`,
+              slot_id: slotId,
+              position_number: p,
+              status: 'AVAILABLE',
+              appointment_id: null,
+              booked_by: null,
+              booked_at: null
+            });
+          }
+          await SlotPosition.insertMany(newPosDocs);
+        } catch (createErr) {
+          // Ignore duplicate key if concurrently created
         }
       }
-      slots = await Slot.find({ centre_id: centreId, slot_date: todayStr }).lean();
     }
 
+    // Refresh slot list from Mongo
+    existingSlots = await Slot.find({ centre_id: centreId, slot_date: targetDateStr }).lean();
+
+    // Helper: parse minutes from slot time string
+    const parseSlotMinutes = (timeStr) => {
+      const m = (timeStr || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (!m) return 0;
+      let hr = parseInt(m[1], 10);
+      const mn = parseInt(m[2], 10);
+      const ampm = m[3].toUpperCase();
+      if (ampm === 'PM' && hr < 12) hr += 12;
+      if (ampm === 'AM' && hr === 12) hr = 0;
+      return hr * 60 + mn;
+    };
+
+    const isTargetToday = targetDateStr === serverTodayStr;
+    const isTargetFuture = targetDateStr > serverTodayStr;
+    const isTargetPast = targetDateStr < serverTodayStr;
+
     const result = [];
-    for (const s of slots) {
+    for (const s of existingSlots) {
       const positions = await SlotPosition.find({ slot_id: s.id }).lean();
       const bookedCount = positions.filter(p => p.status === 'BOOKED').length;
       const availCount = positions.filter(p => p.status === 'AVAILABLE').length;
+
+      const slotStartMinutes = parseSlotMinutes(s.start_time);
+      const slotEndMinutes = slotStartMinutes + 30;
+
+      let isPast = false;
+      let isCurrent = false;
+      let isUpcoming = false;
+
+      if (isTargetPast) {
+        isPast = true;
+      } else if (isTargetFuture) {
+        isUpcoming = true;
+      } else {
+        // Today: real-time check against current clock
+        if (currentMinutesNow >= slotEndMinutes) {
+          isPast = true;
+        } else if (currentMinutesNow >= slotStartMinutes && currentMinutesNow < slotEndMinutes) {
+          isCurrent = true;
+        } else {
+          isUpcoming = true;
+        }
+      }
+
       result.push({
         ...s,
         current_bookings: bookedCount,
         available_positions_count: availCount,
-        is_available: availCount > 0
+        is_available: availCount > 0 && !isPast,
+        is_past: isPast,
+        is_current: isCurrent,
+        is_upcoming: isUpcoming,
+        time_status: isCurrent ? 'CURRENT' : isPast ? 'PAST' : 'UPCOMING',
+        start_minutes: slotStartMinutes,
+        server_current_time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+        server_current_date: serverTodayStr
       });
     }
+
+    // Sort chronologically by start time
+    result.sort((a, b) => (a.start_minutes || 0) - (b.start_minutes || 0));
     return result;
   }
 
@@ -1464,25 +1560,47 @@ class AgriFlowMongoDatabase {
     return { success: true, district: district || 'Mandya', total_registered_acres: Math.max(1420, totalAcres), total_expected_tonnes: Math.max(1240, Math.round(totalTonnes)), centres };
   }
 
-  // ── POSITION BOOKING ───────────────────────────────────
-  async bookAppointmentPosition({ farmer_id, farmer_name, farmer_phone, centre_id, slot_id, position_id, position_number, crop, crop_type, quantity_kg, declared_quantity_kg }) {
+  // ── MULTI-BAY & POSITION BOOKING ──────────────────────
+  async bookAppointmentPosition({ farmer_id, farmer_name, farmer_phone, centre_id, slot_id, position_id, position_number, position_numbers, crop, crop_type, quantity_kg, declared_quantity_kg }) {
     if (!this.isMongoConnected()) return { success: false, error: 'Database disconnected.' };
 
-    let posFilter = {};
-    if (position_id) posFilter = { id: position_id };
-    else if (slot_id && position_number) posFilter = { slot_id, position_number: Number(position_number) };
-    else return { success: false, error: 'Invalid position requested.' };
-
-    const updatedPos = await SlotPosition.findOneAndUpdate(
-      { ...posFilter, status: 'AVAILABLE' },
-      { $set: { status: 'BOOKED', booked_by: farmer_id || 'unknown', booked_at: new Date() } },
-      { new: true }
-    );
-    if (!updatedPos) {
-      return { success: false, error: `Storage Bay #${position_number || 'selected'} was already booked by another farmer. Please choose an open green square.` };
+    let targetNumbers = [];
+    if (Array.isArray(position_numbers) && position_numbers.length > 0) {
+      targetNumbers = position_numbers.map(Number);
+    } else if (position_number) {
+      targetNumbers = [Number(position_number)];
     }
 
-    const slot = await Slot.findOne({ id: updatedPos.slot_id });
+    let positionsToBook = [];
+    let effectiveSlotId = slot_id;
+
+    if (targetNumbers.length > 0) {
+      if (!effectiveSlotId) return { success: false, error: 'slot_id required for bay selection.' };
+
+      // Find all target positions
+      positionsToBook = await SlotPosition.find({
+        slot_id: effectiveSlotId,
+        position_number: { $in: targetNumbers }
+      }).sort({ position_number: 1 });
+
+      const unavailable = positionsToBook.filter(p => p.status !== 'AVAILABLE');
+      if (unavailable.length > 0) {
+        const unavailStr = unavailable.map(p => `#${p.position_number}`).join(', ');
+        return { success: false, error: `Storage Bay(s) ${unavailStr} was just booked by another farmer. Please choose open green squares.` };
+      }
+      if (positionsToBook.length !== targetNumbers.length) {
+        return { success: false, error: 'One or more selected bays could not be found.' };
+      }
+    } else if (position_id) {
+      const pos = await SlotPosition.findOne({ id: position_id, status: 'AVAILABLE' });
+      if (!pos) return { success: false, error: 'Selected bay is no longer available. Please select an open green square.' };
+      positionsToBook = [pos];
+      effectiveSlotId = pos.slot_id;
+    } else {
+      return { success: false, error: 'No storage bay positions provided.' };
+    }
+
+    const slot = await Slot.findOne({ id: effectiveSlotId });
     if (!slot) return { success: false, error: 'Slot not found.' };
 
     const effectiveCentreId = centre_id || slot.centre_id;
@@ -1491,8 +1609,11 @@ class AgriFlowMongoDatabase {
     const apptId = `APPT-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
 
     const finalCrop = crop || crop_type || 'Paddy (Sona Masoori)';
-    const finalQty = Number(quantity_kg || declared_quantity_kg) || 2500;
+    const finalQty = Number(quantity_kg || declared_quantity_kg) || (positionsToBook.length * 500);
     const todayStr = slot.slot_date || new Date().toISOString().split('T')[0];
+
+    const bookedNumbers = positionsToBook.map(p => p.position_number);
+    const baysLabel = bookedNumbers.map(n => `Bay #${n < 10 ? '0' + n : n}`).join(', ');
 
     const newAppt = await Appointment.create({
       id: apptId,
@@ -1507,15 +1628,23 @@ class AgriFlowMongoDatabase {
       appointment_date: todayStr,
       time_slot: slot.start_time,
       slot_id: slot.id,
-      position_number: updatedPos.position_number,
+      position_number: bookedNumbers[0],
+      position_numbers: bookedNumbers,
+      bays_label: baysLabel,
+      is_multi_slot: bookedNumbers.length > 1,
       crop_type: finalCrop,
       quantity_kg: finalQty,
       declared_quantity_kg: finalQty,
       status: 'WAITING'
     });
 
-    updatedPos.appointment_id = apptId;
-    await updatedPos.save();
+    // Mark all positions as booked
+    const posIds = positionsToBook.map(p => p.id);
+    await SlotPosition.updateMany(
+      { id: { $in: posIds } },
+      { $set: { status: 'BOOKED', booked_by: farmer_id || 'unknown', booked_at: new Date(), appointment_id: apptId } }
+    );
+
     slot.current_bookings = await SlotPosition.countDocuments({ slot_id: slot.id, status: 'BOOKED' });
     slot.is_available = slot.current_bookings < slot.maximum_bookings;
     await slot.save();
@@ -1530,14 +1659,28 @@ class AgriFlowMongoDatabase {
 
     await Payment.create({ id: `PAY-${Date.now()}`, procurement_id: procId, appointment_id: apptId, farmer_id: farmer_id || 'unknown', centre_id: effectiveCentreId, amount: finalQty * 22, status: 'PENDING', reference_number: `PAY-${Date.now()}` });
 
-    await this.createNotification(farmer_id || 'unknown', effectiveCentreId, 'BOOKING_CONFIRMED', '✅ Slot Booked!',
-      `Token: ${tokenNumber}. Bay #${updatedPos.position_number}. Slot: ${slot.start_time}. You are in the queue at ${centre?.name || 'Centre'}.`, '🎫');
+    await this.createNotification(
+      farmer_id || 'unknown',
+      effectiveCentreId,
+      'BOOKING_CONFIRMED',
+      '✅ Slot Booked!',
+      `Token: ${tokenNumber}. ${baysLabel}. Slot: ${slot.start_time}. You are in the queue at ${centre?.name || 'Centre'}.`,
+      '🎫'
+    );
 
     if (farmer_phone) {
-      sendSMS(farmer_phone, `AGRIFlow: Slot confirmed at ${centre?.name || 'Centre'}. Token: ${tokenNumber}. Bay #${updatedPos.position_number}.`).catch(() => {});
+      sendSMS(farmer_phone, `AGRIFlow: Slot confirmed at ${centre?.name || 'Centre'}. Token: ${tokenNumber}. Bays: ${baysLabel}.`).catch(() => {});
     }
 
-    return { success: true, appointment: newAppt.toObject(), position: updatedPos.toObject(), slot: slot.toObject(), token_number: tokenNumber };
+    return {
+      success: true,
+      appointment: newAppt.toObject(),
+      position: positionsToBook[0].toObject(),
+      positions: positionsToBook.map(p => p.toObject()),
+      slot: slot.toObject(),
+      token_number: tokenNumber,
+      bays_label: baysLabel
+    };
   }
 
   async cancelAppointmentPosition(appointmentId) {
@@ -1547,10 +1690,19 @@ class AgriFlowMongoDatabase {
     if (appt.status === 'CANCELLED') return { success: false, error: 'Already cancelled.' };
     appt.status = 'CANCELLED';
     await appt.save();
-    const pos = await SlotPosition.findOne({ appointment_id: appointmentId });
-    if (pos) { pos.status = 'AVAILABLE'; pos.appointment_id = null; pos.booked_by = null; await pos.save(); }
+
+    // Free all associated slot positions
+    await SlotPosition.updateMany(
+      { appointment_id: appointmentId },
+      { $set: { status: 'AVAILABLE', appointment_id: null, booked_by: null, booked_at: null } }
+    );
+
     const slot = await Slot.findOne({ id: appt.slot_id });
-    if (slot) { slot.current_bookings = Math.max(0, slot.current_bookings - 1); slot.is_available = true; await slot.save(); }
+    if (slot) {
+      slot.current_bookings = await SlotPosition.countDocuments({ slot_id: slot.id, status: 'BOOKED' });
+      slot.is_available = slot.current_bookings < slot.maximum_bookings;
+      await slot.save();
+    }
     await Centre.updateOne({ id: appt.centre_id }, { $inc: { queue_count: -1 } });
     return { success: true, message: 'Appointment cancelled.' };
   }

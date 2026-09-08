@@ -143,6 +143,15 @@ export async function requestNotificationPermission() {
     const permission = await Notification.requestPermission();
 
     if (permission === 'granted') {
+      // Prompt OneSignal to register mobile push token
+      if (window.OneSignalDeferred) {
+        window.OneSignalDeferred.push(async function(OneSignal) {
+          try {
+            await OneSignal.Notifications.requestPermission();
+          } catch (e) {}
+        });
+      }
+
       // Immediately subscribe to real background push
       const sub = await subscribeToRealWebPush();
 

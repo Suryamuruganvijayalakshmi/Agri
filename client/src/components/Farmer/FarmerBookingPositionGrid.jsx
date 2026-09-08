@@ -16,14 +16,18 @@ export default function FarmerBookingPositionGrid({
   const [loading, setLoading] = useState(true);
   const [realtimePulse, setRealtimePulse] = useState(false);
 
-  // Web Direct Selection State
-  const [selectedPosition, setSelectedPosition] = useState(null);
+  // Multi-Bay Web Selection State
+  const [selectedPositions, setSelectedPositions] = useState([]);
+
+  // Calculate needed 500kg storage bays
+  const packageWeight = 500; // kg per storage bay position
+  const neededBays = Math.max(1, Math.ceil(Number(quantityKg || 0) / packageWeight));
 
   // Phone / WhatsApp Booking State
   const [channel, setChannel] = useState('WHATSAPP'); // 'WHATSAPP' | 'TELEPHONE'
   const [phone, setPhone] = useState('+91 98450 12345');
-  const [packagesCount, setPackagesCount] = useState(5);
-  const [textCommand, setTextCommand] = useState('BOOK 5 PACKAGES MANDYA 10:00AM');
+  const [packagesCount, setPackagesCount] = useState(neededBays);
+  const [textCommand, setTextCommand] = useState(`BOOK ${neededBays} PACKAGES MANDYA 10:00AM`);
   
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingSuccessMsg, setBookingSuccessMsg] = useState(null);
@@ -33,11 +37,13 @@ export default function FarmerBookingPositionGrid({
 
   const slotId = slot?.id || 'slot-centre-1-1000';
 
+  // Keep packagesCount synchronized when neededBays changes
+  useEffect(() => {
+    setPackagesCount(neededBays);
+    setTextCommand(`BOOK ${neededBays} PACKAGES MANDYA ${slot?.start_time ? slot.start_time.split(' ')[0] : '10:00AM'}`);
+  }, [neededBays, slot?.start_time]);
+
   // ── CAPACITY-LINKED GRID SIZE ────────────────────────────────────────────────
-  // Each storage bay / position = 500 kg slot.
-  // Derive from the live centre's daily_capacity_kg so that when the officer
-  // updates capacity in the operator dashboard, the farmer sees it instantly.
-  const packageWeight = 500; // kg per storage bay position
   const centreDailyKg = centre?.daily_capacity_kg || slot?.maximum_bookings * 500 || 20 * 500;
   const totalPositions = Math.max(1, Math.round(centreDailyKg / packageWeight));
   const remainingKg = centre?.remaining_capacity_kg ?? centreDailyKg;
@@ -105,12 +111,18 @@ export default function FarmerBookingPositionGrid({
     };
   }, [slotId, centre?.id, centre?.daily_capacity_kg]);
 
-
   // Derived counts & Storage Area Square metrics
   const bookedCount = positions.filter(p => p.status === 'BOOKED').length;
   const availableCount = positions.filter(p => p.status === 'AVAILABLE').length;
   const isFull = availableCount === 0 || bookedCount >= totalPositions;
   const bookedPercent = Math.round((bookedCount / (totalPositions || 1)) * 100);
+
+  // Auto-Select next available bays needed for declared weight
+  const handleAutoSelectBays = () => {
+    const available = positions.filter(p => p.status === 'AVAILABLE');
+    const toSelect = available.slice(0, neededBays);
+    setSelectedPositions(toSelect);
+  };
 
   // Group 20 positions into 4 Storage Zones (Zone A, B, C, D - 5 squares each)
   const zones = [
@@ -120,9 +132,9 @@ export default function FarmerBookingPositionGrid({
     { name: 'STORAGE ZONE D (WEST BAY)', squares: positions.slice(15, 20) }
   ];
 
-  // Direct Web Booking Action
+  // Direct Web Booking Action (Multi-Bay)
   const handleWebDirectBooking = async () => {
-    if (!selectedPosition) return;
+    if (selectedPositions.length === 0) return;
     setBookingLoading(true);
     setErrorMsg(null);
     setBookingSuccessMsg(null);
@@ -134,19 +146,19 @@ export default function FarmerBookingPositionGrid({
         farmer_name: farmerName,
         centre_id: centre?.id || 'centre-1',
         slot_id: slotId,
-        position_number: selectedPosition.position_number,
+        position_numbers: selectedPositions.map(p => p.position_number),
+        position_number: selectedPositions[0]?.position_number,
         crop_type: crop,
         declared_quantity_kg: Number(quantityKg)
       });
 
-
       if (!res.success) {
-        setErrorMsg(res.error || 'Position was just booked by another farmer. Please choose another square.');
+        setErrorMsg(res.error || 'Selected positions were just booked by another farmer. Please choose other squares.');
       } else {
-        setBookingSuccessMsg(`Direct Web Booking Confirmed for Storage Bay #${selectedPosition.position_number}!`);
+        setBookingSuccessMsg(`Direct Web Booking Confirmed for ${res.bays_label || 'Selected Bays'}!`);
         setConfirmedBooking(res.appointment);
         setShowQrModal(true);
-        setSelectedPosition(null);
+        setSelectedPositions([]);
         loadPositions();
         if (onBookingSuccess) onBookingSuccess(res.appointment);
       }
@@ -273,7 +285,7 @@ export default function FarmerBookingPositionGrid({
               <div style={{ width: '100%', background: '#f8fafc', borderRadius: '12px', padding: '1rem', fontSize: '0.82rem' }}>
                 {[
                   ['Booking ID', confirmedBooking.booking_id],
-                  ['Storage Bay', `BAY #${bayNum}`],
+                  ['Storage Bays', confirmedBooking.bays_label || `BAY #${bayNum}`],
                   ['Procurement Centre', confirmedBooking.centre_name || centre?.name || 'Procurement Yard'],
                   ['Crop & Quantity', `${confirmedBooking.crop_type} (${confirmedBooking.declared_quantity_kg} kg)`],
                   ['Appointment Date', confirmedBooking.appointment_date || 'Today'],
@@ -373,18 +385,44 @@ export default function FarmerBookingPositionGrid({
         </div>
       ) : (
         <div style={{ marginBottom: '1.5rem' }}>
+          {/* Multi-Bay Produce Weight Info & Auto-Select Button */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '1.25rem' }}>
+            <div>
+              <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>
+                Declared Weight: {Number(quantityKg).toLocaleString()} kg • Requires {neededBays} Storage Bay{neededBays > 1 ? 's' : ''} (500 kg each)
+              </span>
+              <div style={{ fontSize: '0.78rem', color: selectedPositions.length >= neededBays ? '#16a34a' : '#2563eb', fontWeight: 700 }}>
+                {selectedPositions.length === 0
+                  ? `Click ${neededBays} open green square(s) below or click Auto-Select.`
+                  : `Selected ${selectedPositions.length} of ${neededBays} required bays: ${selectedPositions.map(p => '#' + (p.position_number < 10 ? '0' + p.position_number : p.position_number)).join(', ')}`}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAutoSelectBays}
+              style={{
+                background: '#22c55e', color: 'white', border: 'none', padding: '0.45rem 0.9rem',
+                borderRadius: '8px', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '0.35rem'
+              }}
+            >
+              <Sparkles size={15} /> ⚡ Auto-Select Next {neededBays} Open Bays
+            </button>
+          </div>
+
           {zones.map((zone, zIdx) => (
             <div key={zIdx} style={{ marginBottom: '1.25rem' }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', letterSpacing: '0.05em', marginBottom: '0.4rem', borderBottom: '1px dashed #cbd5e1', paddingBottom: '0.2rem' }}>
                 {zone.name}
               </div>
 
-              {/* GRID OF SQUARES */}
+              {/* GRID OF SQUARES (MULTI-SELECT SUPPORT) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.85rem' }}>
                 {zone.squares.map((sq) => {
                   if (!sq) return null;
                   const isOccupied = sq.status === 'BOOKED';
-                  const isSelected = selectedPosition?.id === sq.id;
+                  const isSelected = selectedPositions.some(p => p.id === sq.id);
                   const sqNumStr = sq.position_number < 10 ? `0${sq.position_number}` : `${sq.position_number}`;
 
                   return (
@@ -392,7 +430,11 @@ export default function FarmerBookingPositionGrid({
                       key={sq.id}
                       onClick={() => {
                         if (!isOccupied) {
-                          setSelectedPosition(sq);
+                          setSelectedPositions(prev => {
+                            const exists = prev.some(p => p.id === sq.id);
+                            if (exists) return prev.filter(p => p.id !== sq.id);
+                            return [...prev, sq];
+                          });
                         }
                       }}
                       style={{
@@ -428,7 +470,7 @@ export default function FarmerBookingPositionGrid({
                         {isSelected ? '✨' : isOccupied ? '📦' : '🟩'}
                       </span>
                       <span style={{ fontSize: '0.62rem', fontWeight: 900, textTransform: 'uppercase' }}>
-                        {isSelected ? 'SELECTED' : isOccupied ? 'OCCUPIED' : 'CLICK TO BOOK'}
+                        {isSelected ? 'SELECTED' : isOccupied ? 'OCCUPIED' : 'CLICK TO ADD'}
                       </span>
                       <span style={{ fontSize: '0.58rem', opacity: 0.8 }}>
                         {packageWeight} kg Area
@@ -442,15 +484,15 @@ export default function FarmerBookingPositionGrid({
         </div>
       )}
 
-      {/* WEB DIRECT BOOKING BUTTON (WHEN A SQUARE IS SELECTED) */}
-      {selectedPosition && (
+      {/* WEB DIRECT MULTI-BAY BOOKING BUTTON */}
+      {selectedPositions.length > 0 && (
         <div style={{ background: '#f0fdf4', border: '2px solid #16a34a', borderRadius: '12px', padding: '1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <span style={{ fontSize: '0.75rem', color: '#15803d', fontWeight: 700, textTransform: 'uppercase' }}>
-              ✓ Direct Web Booking Ready
+              ✓ Multi-Bay Web Booking Ready ({selectedPositions.length} Selected)
             </span>
             <h4 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: '0.1rem 0 0 0' }}>
-              Selected Storage Square: BAY #{selectedPosition.position_number < 10 ? `0${selectedPosition.position_number}` : selectedPosition.position_number}
+              Selected Storage Bays: {selectedPositions.map(p => `BAY #${p.position_number < 10 ? '0' + p.position_number : p.position_number}`).join(', ')}
             </h4>
             <p style={{ fontSize: '0.8rem', color: '#475569', margin: '0.1rem 0 0 0' }}>
               Farmer: <strong>{farmerName}</strong> • Produce: <strong>{crop}</strong> ({quantityKg} kg)
@@ -477,7 +519,7 @@ export default function FarmerBookingPositionGrid({
             }}
           >
             {bookingLoading ? <RefreshCw size={18} className="animate-spin" /> : <MousePointerClick size={18} />}
-            CONFIRM WEB BOOKING (BAY #{selectedPosition.position_number})
+            CONFIRM WEB BOOKING ({selectedPositions.length} BAYS)
           </button>
         </div>
       )}
@@ -500,8 +542,10 @@ export default function FarmerBookingPositionGrid({
                 <strong style={{ fontSize: '1.1rem', color: '#16a34a' }}>Token {confirmedBooking.token_number}</strong>
               </div>
               <div>
-                <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block' }}>STORAGE SQUARE</span>
-                <strong style={{ fontSize: '0.95rem', color: '#2563eb' }}>BAY #{confirmedBooking.position_number < 10 ? `0${confirmedBooking.position_number}` : confirmedBooking.position_number}</strong>
+                <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block' }}>STORAGE SQUARE(S)</span>
+                <strong style={{ fontSize: '0.95rem', color: '#2563eb' }}>
+                  {confirmedBooking.bays_label || `BAY #${confirmedBooking.position_number < 10 ? '0' + confirmedBooking.position_number : confirmedBooking.position_number}`}
+                </strong>
               </div>
               <div>
                 <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block' }}>QR TOKEN</span>
