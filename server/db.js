@@ -1789,6 +1789,13 @@ class AgriFlowMongoDatabase {
     // ── PRODUCT / CROP MSP RATE MANAGEMENT ──────────────────
     async getAllProducts() {
         if (!this.isMongoConnected()) return [];
+        const standardProducts = [
+            { id: 'prod-paddy', name: 'Paddy (Sona Masoori)', category: 'Grain', package_weight_kg: 50, msp_price_per_kg: 22, moisture_threshold_percent: 14, status: 'APPROVED' },
+            { id: 'prod-groundnut', name: 'Groundnut', category: 'Oilseed', package_weight_kg: 50, msp_price_per_kg: 68, moisture_threshold_percent: 10, status: 'APPROVED' },
+            { id: 'prod-maize', name: 'Maize', category: 'Grain', package_weight_kg: 50, msp_price_per_kg: 22, moisture_threshold_percent: 14, status: 'APPROVED' },
+            { id: 'prod-sugarcane', name: 'Sugarcane', category: 'Cash Crop', package_weight_kg: 100, msp_price_per_kg: 3.4, moisture_threshold_percent: 18, status: 'APPROVED' }
+        ];
+        await Promise.all(standardProducts.map((product) => Product.updateOne({ $or: [{ id: product.id }, { name: product.name }] }, { $setOnInsert: product }, { upsert: true })));
         const products = await Product.find({}).sort({ name: 1 }).lean();
         return products.map(p => ({
             id: p.id || (p._id && p._id.toString()),
