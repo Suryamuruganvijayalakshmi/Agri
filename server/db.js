@@ -1823,7 +1823,10 @@ class AgriFlowMongoDatabase {
 
     async updateProductMSP(productId, newPricePerKg) {
         if (!this.isMongoConnected()) return { success: false, error: 'DB offline' };
-        const product = await Product.findOne({ $or: [{ id: productId }, { _id: productId }] });
+        let product = await Product.findOne({ id: String(productId) });
+        if (!product && mongoose.isValidObjectId(productId)) {
+            product = await Product.findById(productId);
+        }
         if (!product) return { success: false, error: 'Product not found.' };
         const oldPrice = product.msp_price_per_kg;
         product.msp_price_per_kg = Number(newPricePerKg);
