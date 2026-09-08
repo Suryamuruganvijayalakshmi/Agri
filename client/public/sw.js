@@ -148,6 +148,56 @@ self.addEventListener('notificationclose', (event) => {
     console.log('[SW] Notification closed by user:', event.notification.tag);
 });
 
+// Browsers can rotate push subscriptions while the site is closed. Recreate
+// the subscription with the server's current VAPID key and keep its user link.
+self.addEventListener('pushsubscriptionchange', (event) => {
+    event.waitUntil(
+        Promise.all([
+            fetch('/api/notifications/vapid-public-key').then((response) => response.json()),
+            self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        ]).then(async([keyResponse, clients]) => {
+            if (!keyResponse.publicKey) throw new Error('VAPID public key is unavailable');
+
+            const client = clients[0];
+            const userInfo = await new Promise((resolve) => {
+                if (!client) {
+                    resolve({ userId: 'anonymous', role: 'FARMER' });
+                    return;
+                }
+
+                const channel = new MessageChannel();
+                let settled = false;
+                const finish = (value) => {
+                    if (settled) return;
+                    settled = true;
+                    resolve(value || { userId: 'anonymous', role: 'FARMER' });
+                };
+                channel.port1.onmessage = (message) => finish(message.data);
+                client.postMessage({ type: 'GET_PUSH_USER' }, [channel.port2]);
+                setTimeout(() => finish(null), 1000);
+            });
+
+            const newSubscription = await self.registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(keyResponse.publicKey)
+            });
+
+            const response = await fetch('/api/notifications/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subscription: newSubscription.toJSON(),
+                    userId: userInfo.userId || 'anonymous',
+                    role: userInfo.role || 'FARMER'
+                })
+            });
+            if (!response.ok) throw new Error(`Subscription save failed: ${response.status}`);
+        }).catch((error) => {
+            console.error('[SW] Push subscription renewal failed:', error);
+        })
+    );
+});
+
 // ─── Push Subscription Change ────────────────────────────────
 // Fires when browser invalidates subscription (e.g. user cleared cache)
 // We re-subscribe automatically and save the new subscription to server
