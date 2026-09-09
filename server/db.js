@@ -1607,10 +1607,36 @@ class AgriFlowMongoDatabase {
         const est = Math.round(acres * yieldFactor * 1.1);
         const harvestMs = new Date(sowingDate).getTime() + maturityDays * 86400000;
         const harvestStr = new Date(harvestMs).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        const harvestEndStr = new Date(harvestMs + 7 * 86400000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
         const cropObj = { id: cId, parcel_id: data.parcel_id || 'parcel-101', farmer_id: data.farmer_id || 'default-farmer', crop_name: cropName, sowing_date: sowingDate, cultivated_area_acres: acres, irrigation_type: data.irrigation_type || 'CANAL', expected_harvest_start: harvestStr, estimated_yield_kg: est, status: 'CULTIVATING' };
         if (this.isMongoConnected()) await CropRecord.create(cropObj);
-        return { success: true, crop: cropObj };
+
+        const prediction = {
+            id: `prediction-${uuidv4().substring(0, 8)}`,
+            crop_record_id: cId,
+            farmer_id: cropObj.farmer_id,
+            crop_name: cropName,
+            cultivated_area_acres: acres,
+            expected_harvest_start: harvestStr,
+            expected_harvest_end: harvestEndStr,
+            estimated_yield_min_kg: Math.round(est * 0.9),
+            estimated_yield_max_kg: Math.round(est * 1.1),
+            confidence_percent: 87,
+            assigned_centre_id: 'centre-1',
+            assigned_centre_name: 'Mandya Central Procurement Yard',
+            assigned_centre_distance_km: 3.5,
+            eligible_slot_start_date: harvestStr,
+            eligible_slot_end_date: harvestEndStr,
+            influencing_factors: [
+                { factor_name: 'Cultivated Area', impact: '+10%', description: `${acres} acres registered` },
+                { factor_name: 'Irrigation', impact: data.irrigation_type === 'RAINFED' ? '-5%' : '+8%', description: `${data.irrigation_type || 'CANAL'} irrigation selected` },
+                { factor_name: 'Crop Cycle', impact: '+6%', description: `${maturityDays}-day maturity model applied` }
+            ]
+        };
+
+        if (this.isMongoConnected()) await HarvestPrediction.create(prediction);
+        return { success: true, crop: cropObj, prediction };
     }
 
     async getCropRecords(farmerId) {
