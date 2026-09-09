@@ -215,6 +215,7 @@ function NavigationBar({ onOpenDemoModal }) {
           {role === 'FARMER' && (
             <div style={{ display: 'flex', gap: '0.35rem', fontSize: '0.85rem' }}>
               <Link to="/farmer/dashboard" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navDashboard}</Link>
+              <Link to="/farmer/profile" style={{ color: location.pathname === '/farmer/profile' ? '#4ade80' : '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>Profile</Link>
               <Link to="/farmer/my-farm" style={{ color: '#4ade80', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 800 }}>{t.navMyFarm}</Link>
               <Link to="/farmer/centres" style={{ color: '#38bdf8', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 700 }}>{t.navCentres}</Link>
               <Link to="/farmer/map" style={{ color: '#cbd5e1', padding: '0.35rem 0.65rem', textDecoration: 'none', fontWeight: 600 }}>{t.navMap}</Link>
@@ -354,6 +355,7 @@ function NavigationBar({ onOpenDemoModal }) {
           {role === 'FARMER' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
               <Link to="/farmer/dashboard" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navDashboard}</Link>
+              <Link to="/farmer/profile" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">Profile</Link>
               <Link to="/farmer/my-farm" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navMyFarm}</Link>
               <Link to="/farmer/centres" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navCentres}</Link>
               <Link to="/farmer/map" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-link">{t.navMap}</Link>

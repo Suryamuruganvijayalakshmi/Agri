@@ -9,9 +9,12 @@ const farmerSchema = new mongoose.Schema({
     state: { type: String, default: 'Karnataka' },
     district: { type: String, default: 'Mandya' },
     village: { type: String, default: 'Central' },
+    taluk: { type: String, default: '' },
     landholding_acres: { type: Number, default: 4.5 },
+    land_area_acres: { type: Number, default: 4.5 },
     primary_crop: { type: String, default: 'Paddy (Sona Masoori)' },
     aadhaar_number: { type: String, default: 'XXXX-XXXX-4902' },
+    aadhaar_last_four: { type: String, default: '' },
     bank_name: { type: String, default: '' },
     bank_account: { type: String, default: 'XXXX-XXXX-8821' },
     ifsc: { type: String, default: 'SBIN0001234' }

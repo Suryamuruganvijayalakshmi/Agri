@@ -34,11 +34,14 @@ export default function FarmerProfilePage() {
         setPhone(farmer.phone || profile?.phone || '');
         setFarmerCode(farmer.farmer_code || '');
         setVillage(farmer.village || '');
+        setTaluk(farmer.taluk || '');
         setDistrict(farmer.district || '');
         setState(farmer.state || '');
+        setAadhaarLastFour(farmer.aadhaar_last_four || '');
         setBankName(farmer.bank_name || '');
         setBankAccount(farmer.bank_account || '');
         setIfsc(farmer.ifsc || '');
+        setLandAreaAcres(farmer.land_area_acres ?? farmer.landholding_acres ?? 4.5);
       } catch (error) {
         setMsg({ type: 'error', text: 'Could not load saved profile details.' });
       }
