@@ -266,7 +266,7 @@ app.post('/api/products/update-price', async(req, res) => {
 
 app.post('/api/auth/signup', async(req, res) => {
     try {
-        const { email, password, full_name, fullName, role, phone, district, state, village, aadhaar_number, bank_account, ifsc, assigned_centre_id, assigned_centre_name } = req.body;
+        const { email, password, full_name, fullName, role, phone, district, state, village, aadhaar_number, bank_name, bank_account, ifsc, assigned_centre_id, assigned_centre_name } = req.body;
         const nameToUse = full_name || fullName;
 
         if (!email || !password || !nameToUse) {
@@ -306,6 +306,7 @@ app.post('/api/auth/signup', async(req, res) => {
                 state: state || 'Karnataka',
                 village: village || 'Central',
                 aadhaar_number: aadhaar_number || 'XXXX-XXXX-4902',
+                bank_name: bank_name || '',
                 bank_account: bank_account || 'XXXX-XXXX-8821',
                 ifsc: ifsc || 'SBIN0001234'
             });
@@ -469,6 +470,26 @@ app.post('/api/auth/reset-password', async(req, res) => {
     }
 });
 
+// Return the authenticated farmer's stored profile
+app.get('/api/farmers/profile', async(req, res) => {
+    try {
+        const userId = req.query.userId;
+        const email = req.query.email;
+        let farmer = null;
+
+        if (userId) farmer = await Farmer.findOne({ profile_id: userId });
+        if (!farmer && email) {
+            const user = await User.findOne({ email: email.toLowerCase() });
+            if (user) farmer = await Farmer.findOne({ profile_id: user.id });
+        }
+
+        if (!farmer) return res.status(404).json({ success: false, error: 'Farmer profile not found.' });
+        res.json({ success: true, farmer });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Update Farmer Profile in MongoDB
 app.put('/api/farmers/profile', async(req, res) => {
     try {
@@ -483,7 +504,9 @@ app.put('/api/farmers/profile', async(req, res) => {
             state,
             aadhaar_last_four,
             bank_name,
+            bank_account,
             bank_account_last_four,
+            ifsc,
             ifsc_code,
             land_area_acres
         } = req.body;
@@ -512,8 +535,8 @@ app.put('/api/farmers/profile', async(req, res) => {
                 state,
                 aadhaar_last_four,
                 bank_name,
-                bank_account_last_four,
-                ifsc_code,
+                bank_account: bank_account || bank_account_last_four,
+                ifsc: ifsc || ifsc_code,
                 land_area_acres: Number(land_area_acres || 0),
                 updated_at: new Date()
             }

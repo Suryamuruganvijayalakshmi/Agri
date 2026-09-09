@@ -14,6 +14,9 @@ export default function FarmerRegister() {
   const [state, setState] = useState('');
   const [district, setDistrict] = useState('');
   const [village, setVillage] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankAccount, setBankAccount] = useState('');
+  const [ifsc, setIfsc] = useState('');
   const [preferredLanguage, setPreferredLanguage] = useState('en');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -32,6 +35,9 @@ export default function FarmerRegister() {
       state,
       district,
       village,
+      bank_name: bankName,
+      bank_account: bankAccount,
+      ifsc,
       preferredLanguage
     });
 
@@ -180,6 +186,37 @@ export default function FarmerRegister() {
               <option value="ta">தமிழ் (Tamil)</option>
               <option value="te">తెలుగు (Telugu)</option>
             </select>
+          </div>
+
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.75rem' }}>Bank Details</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <input
+                type="text"
+                placeholder="Bank name"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                required
+              />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="Account number"
+                value={bankAccount}
+                onChange={(e) => setBankAccount(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                required
+              />
+            </div>
+            <input
+              type="text"
+              placeholder="IFSC code"
+              value={ifsc}
+              onChange={(e) => setIfsc(e.target.value.toUpperCase())}
+              style={{ width: '100%', padding: '0.6rem', marginTop: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+              required
+            />
           </div>
 
           <button

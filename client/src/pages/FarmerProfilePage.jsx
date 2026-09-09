@@ -13,13 +13,39 @@ export default function FarmerProfilePage() {
   const [district, setDistrict] = useState(profile?.district || 'Mandya');
   const [state, setState] = useState(profile?.state || 'Karnataka');
   const [aadhaarLastFour, setAadhaarLastFour] = useState(profile?.aadhaar_last_four || '4902');
-  const [bankName, setBankName] = useState(profile?.bank_name || 'State Bank of India');
-  const [accountLastFour, setAccountLastFour] = useState(profile?.bank_account_last_four || '8821');
-  const [ifsc, setIfsc] = useState(profile?.ifsc_code || 'SBIN0000867');
+  const [bankName, setBankName] = useState(profile?.bank_name || '');
+  const [bankAccount, setBankAccount] = useState(profile?.bank_account || '');
+  const [ifsc, setIfsc] = useState(profile?.ifsc || '');
   const [landAreaAcres, setLandAreaAcres] = useState(profile?.land_area_acres || 4.5);
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const params = new URLSearchParams({ userId: user?.id || '', email: user?.email || '' });
+        const response = await fetch(`/api/farmers/profile?${params}`);
+        const data = await response.json();
+        if (!response.ok || !data.success) return;
+
+        const farmer = data.farmer;
+        setFullName(farmer.name || profile?.full_name || '');
+        setPhone(farmer.phone || profile?.phone || '');
+        setFarmerCode(farmer.farmer_code || '');
+        setVillage(farmer.village || '');
+        setDistrict(farmer.district || '');
+        setState(farmer.state || '');
+        setBankName(farmer.bank_name || '');
+        setBankAccount(farmer.bank_account || '');
+        setIfsc(farmer.ifsc || '');
+      } catch (error) {
+        setMsg({ type: 'error', text: 'Could not load saved profile details.' });
+      }
+    };
+
+    if (user?.id || user?.email) loadProfile();
+  }, [user, profile]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -41,8 +67,8 @@ export default function FarmerProfilePage() {
           state,
           aadhaar_last_four: aadhaarLastFour,
           bank_name: bankName,
-          bank_account_last_four: accountLastFour,
-          ifsc_code: ifsc,
+          bank_account: bankAccount,
+          ifsc,
           land_area_acres: Number(landAreaAcres)
         })
       });
@@ -192,12 +218,12 @@ export default function FarmerProfilePage() {
             <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.2rem' }}>Account (Last 4)</label>
-            <input type="text" maxLength="4" value={accountLastFour} onChange={(e) => setAccountLastFour(e.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }} />
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.2rem' }}>Account Number</label>
+            <input type="text" inputMode="numeric" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }} required />
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.2rem' }}>IFSC Code</label>
-            <input type="text" value={ifsc} onChange={(e) => setIfsc(e.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
+            <input type="text" value={ifsc} onChange={(e) => setIfsc(e.target.value.toUpperCase())} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} required />
           </div>
         </div>
 
