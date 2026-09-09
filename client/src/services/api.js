@@ -419,7 +419,6 @@ export const resetCentreAPI = async(centreId = 'centre-1') => {
 };
 
 // Legacy compat aliases
-export const bookPhoneWhatsappAPI = async(bookingData) => bookAppointmentAtomic(bookingData);
 export const reallocateStorageAPI = async() => ({ success: true });
 export const fetchLoadPackageMetrics = async() => ({ success: true, packages: [] });
 export const submitQualityInspectionAPI = async(qualData) => {

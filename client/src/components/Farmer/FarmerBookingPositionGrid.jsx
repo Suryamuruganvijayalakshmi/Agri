@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { socket } from '../../services/socket';
-import { fetchSlotPositions, bookPhoneWhatsappAPI, bookAppointmentPosition } from '../../services/api';
-import { CheckCircle2, AlertTriangle, RefreshCw, Sparkles, QrCode, Warehouse, Box, PhoneCall, MessageSquare, Send, Smartphone, MousePointerClick } from 'lucide-react';
+import { fetchSlotPositions, bookAppointmentAtomic, bookAppointmentPosition } from '../../services/api';
+import { CheckCircle2, AlertTriangle, RefreshCw, Sparkles, QrCode, Warehouse, Box, PhoneCall, MousePointerClick } from 'lucide-react';
 
 export default function FarmerBookingPositionGrid({
   slot,
@@ -24,8 +24,8 @@ export default function FarmerBookingPositionGrid({
   const packageWeight = 500; // kg per storage bay position
   const neededBays = Math.max(1, Math.ceil(Number(quantityKg || 0) / packageWeight));
 
-  // Phone / WhatsApp Booking State
-  const [channel, setChannel] = useState('WHATSAPP'); // 'WHATSAPP' | 'TELEPHONE'
+  // Telephone IVR Booking State
+  const [channel] = useState('TELEPHONE');
   const [phone, setPhone] = useState('+91 98450 12345');
   const [packagesCount, setPackagesCount] = useState(neededBays);
   const [textCommand, setTextCommand] = useState(`BOOK ${neededBays} PACKAGES MANDYA 10:00AM`);
@@ -171,8 +171,8 @@ export default function FarmerBookingPositionGrid({
     }
   };
 
-  // WhatsApp & Phone Hotline Booking Action
-  const handlePhoneWhatsappBooking = async (e) => {
+  // Telephone IVR Booking Action
+  const handleTelephoneBooking = async (e) => {
     if (e) e.preventDefault();
     setBookingLoading(true);
     setErrorMsg(null);
@@ -180,7 +180,7 @@ export default function FarmerBookingPositionGrid({
     setConfirmedBooking(null);
 
     try {
-      const res = await bookPhoneWhatsappAPI({
+      const res = await bookAppointmentAtomic({
         phone,
         farmer_name: farmerName,
         textCommand,
@@ -191,7 +191,7 @@ export default function FarmerBookingPositionGrid({
       });
 
       if (!res.success) {
-        setErrorMsg(res.error || 'Failed to process WhatsApp / Telephone booking.');
+        setErrorMsg(res.error || 'Failed to process telephone booking.');
       } else {
         setBookingSuccessMsg(res.message);
         setConfirmedBooking(res.appointment);
@@ -200,7 +200,7 @@ export default function FarmerBookingPositionGrid({
         if (onBookingSuccess) onBookingSuccess(res.appointment);
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Error processing phone booking.');
+      setErrorMsg(err.message || 'Error processing telephone booking.');
     } finally {
       setBookingLoading(false);
     }
@@ -336,7 +336,7 @@ export default function FarmerBookingPositionGrid({
             )}
           </div>
           <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
-            Each square = 1 Storage Unit (50kg capacity). <strong>Book directly by selecting an open square below OR use WhatsApp/Phone hotline!</strong>
+            Each square = 1 Storage Unit (50kg capacity). <strong>Book directly by selecting an open square below or use the telephone hotline.</strong>
           </p>
         </div>
 
@@ -566,61 +566,21 @@ export default function FarmerBookingPositionGrid({
         </div>
       )}
 
-      {/* WHATSAPP & TELEPHONE BOOKING SIMULATOR FORM */}
+      {/* TELEPHONE BOOKING SIMULATOR FORM */}
       <div style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)', border: '2px solid #2563eb', borderRadius: '16px', padding: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Smartphone size={20} color="#2563eb" /> 📞 OR BOOK VIA WHATSAPP & TELEPHONE HOTLINE
+              <PhoneCall size={20} color="#2563eb" /> 📞 BOOK VIA TELEPHONE HOTLINE
             </h3>
             <p style={{ fontSize: '0.78rem', color: '#64748b', margin: '0.15rem 0 0 0' }}>
-              Prefer booking over the phone? Enter details below to simulate an automated WhatsApp or IVR hotline booking!
+              Prefer booking over the phone? Enter details below to simulate an IVR hotline booking.
             </p>
           </div>
 
-          <div style={{ display: 'flex', background: '#ffffff', padding: '0.2rem', borderRadius: '8px', border: '1px solid #cbd5e1', gap: '0.2rem' }}>
-            <button
-              type="button"
-              onClick={() => setChannel('WHATSAPP')}
-              style={{
-                padding: '0.35rem 0.75rem',
-                borderRadius: '6px',
-                border: 'none',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                background: channel === 'WHATSAPP' ? '#22c55e' : 'transparent',
-                color: channel === 'WHATSAPP' ? '#ffffff' : '#64748b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.3rem'
-              }}
-            >
-              <MessageSquare size={14} /> WhatsApp
-            </button>
-            <button
-              type="button"
-              onClick={() => setChannel('TELEPHONE')}
-              style={{
-                padding: '0.35rem 0.75rem',
-                borderRadius: '6px',
-                border: 'none',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                background: channel === 'TELEPHONE' ? '#2563eb' : 'transparent',
-                color: channel === 'TELEPHONE' ? '#ffffff' : '#64748b',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.3rem'
-              }}
-            >
-              <PhoneCall size={14} /> Telephone IVR
-            </button>
-          </div>
         </div>
 
-        <form onSubmit={handlePhoneWhatsappBooking} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        <form onSubmit={handleTelephoneBooking} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
             <div>
               <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
@@ -654,7 +614,7 @@ export default function FarmerBookingPositionGrid({
 
           <div>
             <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.25rem' }}>
-              {channel === 'WHATSAPP' ? '💬 WhatsApp Text Command' : '🎙️ Toll-Free IVR Voice Command'}
+              🎙️ Toll-Free IVR Voice Command
             </label>
             <input
               type="text"
@@ -673,7 +633,7 @@ export default function FarmerBookingPositionGrid({
               padding: '0.75rem',
               borderRadius: '10px',
               border: 'none',
-              background: isFull ? '#cbd5e1' : channel === 'WHATSAPP' ? '#22c55e' : '#2563eb',
+              background: '#2563eb',
               color: 'white',
               fontWeight: 800,
               fontSize: '0.9rem',
@@ -686,15 +646,11 @@ export default function FarmerBookingPositionGrid({
           >
             {bookingLoading ? (
               <RefreshCw size={18} className="animate-spin" />
-            ) : channel === 'WHATSAPP' ? (
-              <Send size={18} />
             ) : (
               <PhoneCall size={18} />
             )}
             {isFull
               ? 'ALL STORAGE BAY SQUARES FULL'
-              : channel === 'WHATSAPP'
-              ? 'SEND WHATSAPP BOOKING TEXT'
               : 'DIAL TOLL-FREE IVR HOTLINE BOOKING'}
           </button>
         </form>
